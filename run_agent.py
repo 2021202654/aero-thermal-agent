@@ -45,14 +45,16 @@ from tools.citation import CitationResolverTool
 from tools.pdf_parser import PDFAnalysisTool
 from tools.report import ReportTool, ExportFindingTool
 from tools.pandoc_export import PandocExportTool
+from tools.hypothesis import HypothesisGenerator
 
 
-async def run_once(config: AgentConfig, task: str):
-    """单次问答模式。"""
-    agent = config.build_agent()
+def _equip_tools(agent, config: AgentConfig):
+    """统一装备所有工具（含需要 LLM 注入的工具）。"""
+    search = LiteratureSearchTool()
+    web = WebSearchTool()
 
-    agent.equip(LiteratureSearchTool())
-    agent.equip(WebSearchTool())
+    agent.equip(search)
+    agent.equip(web)
     agent.equip(AeroThermalComputeTool())
     agent.equip(CodeExecutionTool())
     agent.equip(CitationResolverTool())
@@ -60,6 +62,18 @@ async def run_once(config: AgentConfig, task: str):
     agent.equip(ReportTool())
     agent.equip(ExportFindingTool())
     agent.equip(PandocExportTool())
+    # AI Scientist 核心：假设生成器（需要 LLM + 检索工具注入）
+    agent.equip(HypothesisGenerator(
+        llm=agent.llm,
+        search_tool=search,
+        web_tool=web,
+    ))
+
+
+async def run_once(config: AgentConfig, task: str):
+    """单次问答模式。"""
+    agent = config.build_agent()
+    _equip_tools(agent, config)
 
     print(f"\n{'='*60}")
     print(f"Agent: {agent.role.name}")
@@ -85,16 +99,7 @@ async def run_once(config: AgentConfig, task: str):
 async def interactive(config: AgentConfig):
     """交互模式 —— 持续对话。"""
     agent = config.build_agent()
-
-    agent.equip(LiteratureSearchTool())
-    agent.equip(WebSearchTool())
-    agent.equip(AeroThermalComputeTool())
-    agent.equip(CodeExecutionTool())
-    agent.equip(CitationResolverTool())
-    agent.equip(PDFAnalysisTool())
-    agent.equip(ReportTool())
-    agent.equip(ExportFindingTool())
-    agent.equip(PandocExportTool())
+    _equip_tools(agent, config)
 
     print(f"\n{'='*60}")
     print(f" 气固热导 AI Agent — {agent.role.name}")
@@ -169,7 +174,7 @@ def main():
     )
     parser.add_argument(
         "--llm", "-l", type=str, default="vllm_local",
-        choices=["vllm_local", "bailian", "ollama", "custom"],
+        choices=["vllm_local", "bailian", "siliconflow", "ollama", "custom"],
         help="LLM 后端选择",
     )
     parser.add_argument(

@@ -90,6 +90,17 @@ def _ollama_config() -> LLMConfig:
     )
 
 
+def _siliconflow_config() -> LLMConfig:
+    """硅基流动 API 配置 —— DeepSeek-V3 / Qwen 等开源模型，性价比极高。"""
+    return LLMConfig(
+        base_url="https://api.siliconflow.cn/v1",
+        api_key=os.getenv("SILICONFLOW_API_KEY", "your-api-key-here"),
+        model="deepseek-ai/DeepSeek-V3",
+        temperature=0.3,
+        max_tokens=2048,
+    )
+
+
 def _custom_config() -> LLMConfig:
     """从 05_AI_Agent/llm_config.json 读取自定义 LLM 配置。
 
@@ -152,6 +163,7 @@ class AgentConfig:
 
     PRESETS = {
         "bailian": _bailian_config,
+        "siliconflow": _siliconflow_config,
         "vllm_local": _vllm_local_config,
         "ollama": _ollama_config,
         "custom": _custom_config,
@@ -197,14 +209,16 @@ class AgentConfig:
 
         return Agent(
             llm_config=self.llm,
-            name="AeroThermalExpert",
-            profile="高超声速气固界面耦合研究专家，精通气动热力学、催化复合、SBLI、非平衡流动等领域",
-            goal="辅助研究者完成文献检索、多步推理、数值计算、证据合成等研究任务",
+            name="AeroThermalScientist",
+            profile="高超声速气固界面耦合 AI Scientist，精通气动热力学、催化复合、SBLI、非平衡流动。能主动识别研究 Gap、生成可验证假设、设计实验方案",
+            goal="从被动问答升级为主动科研：文献 Gap 识别 → 假设生成 → 实验设计 → 结果分析 → 论文生成",
             constraints=[
                 "所有引用必须可溯源（提供DOI或论文标题）",
                 "数值计算结果必须标注计算方法和假设条件",
                 "不确定或超出知识范围的内容必须明确标注为'待验证'",
                 "不编造数据，不虚构引用",
+                "生成的假设必须通过物理约束验证（参数边界、流态一致性、守恒律）",
+                "假设预测必须具体可验证（数值或明确趋势）",
             ],
             mode=self.mode,
             verbose=self.verbose,

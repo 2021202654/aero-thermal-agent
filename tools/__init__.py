@@ -10,6 +10,8 @@
 - ReportTool               : 结构化 Markdown 研究报告生成
 - ExportFindingTool        : 单条研究发现记录
 - PandocExportTool         : Markdown → LaTeX/DOCX/PDF 格式导出
+- HypothesisGenerator      : AI Scientist 核心 — 文献 Gap 识别 + 假设生成 + 物理约束验证
+- PhysicsConstraintLayer   : 气固界面物理约束验证层（参数边界/流态/守恒律）
 """
 
 from .search import LiteratureSearchTool
@@ -20,6 +22,8 @@ from .citation import CitationResolverTool
 from .pdf_parser import PDFAnalysisTool
 from .report import ReportTool, ExportFindingTool
 from .pandoc_export import PandocExportTool
+from .hypothesis import HypothesisGenerator
+from .physics_constraints import PhysicsConstraintLayer
 
 __all__ = [
     "LiteratureSearchTool",
@@ -31,4 +35,6 @@ __all__ = [
     "ReportTool",
     "ExportFindingTool",
     "PandocExportTool",
+    "HypothesisGenerator",
+    "PhysicsConstraintLayer",
 ]
