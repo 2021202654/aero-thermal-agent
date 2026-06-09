@@ -91,7 +91,10 @@ async def run_once(config: AgentConfig, task: str):
         print(f"\n{'─'*60}")
         print(f"[i] Metadata: {reply.metadata}")
     except Exception as e:
-        print(f"\n[!] Agent error：{e}")
+        import traceback
+        print(f"\n[!] Agent error: {e}")
+        print("[TRACEBACK]")
+        traceback.print_exc()
     finally:
         await agent.close()
 

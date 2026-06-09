@@ -189,7 +189,7 @@ class LiteratureSearchTool(Action):
         ]
 
     def _format_results(self, query: str, results: list[dict[str, Any]]) -> str:
-        lines = [f"🔍 检索 '{query}' 返回 {len(results)} 篇文献：\n"]
+        lines = [f"[search] '{query}' — {len(results)} results:\n"]
         for i, r in enumerate(results, 1):
             doi = r.get("doi", "")
             doi_link = f"https://doi.org/{doi}" if doi else "无DOI"

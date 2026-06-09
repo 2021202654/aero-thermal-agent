@@ -53,6 +53,7 @@ class ReActOrchestrator:
 
         steps = 0
         final_reply = ""
+        _call_cache: dict[tuple, str] = {}  # (tool_name, args_key) → result_preview
 
         while steps < self.max_steps:
             steps += 1
@@ -78,21 +79,36 @@ class ReActOrchestrator:
                     func_args = json.loads(tc["function"]["arguments"])
 
                     if self.verbose:
-                        print(f"\n  🔧 调用工具: {func_name}({json.dumps(func_args, ensure_ascii=False)})")
+                        print(f"\n  [tool] {func_name}({json.dumps(func_args, ensure_ascii=False)})")
 
-                    # 执行工具
-                    action = registry.get(func_name)
-                    if action is None:
-                        tool_result = f"[错误] 未知工具: {func_name}"
+                    # ── 去重：相同工具+相同参数不重复执行 ──
+                    args_key = tuple(sorted(
+                        (k, str(v)) for k, v in func_args.items()
+                    ))
+                    cache_key = (func_name, args_key)
+                    if cache_key in _call_cache:
+                        tool_result = (
+                            f"[duplicate call skipped] Already called {func_name} with "
+                            f"these args. Previous result summary:\n{_call_cache[cache_key]}"
+                        )
+                        if self.verbose:
+                            print(f"  [skip] duplicate call, using cached result")
                     else:
-                        try:
-                            tool_result = await action.run(**func_args)
-                        except Exception as e:
-                            tool_result = f"[工具执行错误] {func_name}: {e}"
+                        # 执行工具
+                        action = registry.get(func_name)
+                        if action is None:
+                            tool_result = f"[error] Unknown tool: {func_name}"
+                        else:
+                            try:
+                                tool_result = await action.run(**func_args)
+                            except Exception as e:
+                                tool_result = f"[tool error] {func_name}: {e}"
+                        # 缓存
+                        _call_cache[cache_key] = str(tool_result)[:300]
 
                     if self.verbose:
                         preview = str(tool_result)[:500]
-                        print(f"  📋 工具返回 ({len(str(tool_result))} chars): {preview}...")
+                        print(f"  [result] ({len(str(tool_result))} chars): {preview}...")
 
                     # 工具结果加入历史
                     messages.append(
@@ -117,8 +133,20 @@ class ReActOrchestrator:
             break
 
         else:
-            # 达到 max_steps
-            final_reply = f"（Agent 在 {self.max_steps} 步内未完成任务，已停止。最后状态：{memory.working.snapshot()}）"
+            # 达到 max_steps —— 请求 LLM 做最终合成
+            if messages:
+                try:
+                    force_prompt = Message.user(
+                        "你已达到最大工具调用步数。请基于以上所有已获得的信息，"
+                        "立即给出最终回答。不要请求更多工具，直接输出结论。"
+                    )
+                    messages.append(force_prompt)
+                    final_resp = await self.llm.chat(messages)
+                    final_reply = final_resp.content
+                except Exception:
+                    final_reply = f"（Agent 在 {self.max_steps} 步内未完成任务，已停止。）"
+            else:
+                final_reply = f"（Agent 在 {self.max_steps} 步内未完成任务，已停止。）"
 
         # 生成最终消息
         result = Message.agent(

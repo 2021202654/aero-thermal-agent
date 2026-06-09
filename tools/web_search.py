@@ -42,7 +42,7 @@ class WebSearchTool(Action):
             "search_type": {
                 "type": "string",
                 "enum": ["keyword", "doi", "title"],
-                "description": "检索类型：keyword=关键词搜索, doi=按DOI精确查找, title=按标题搜索",
+                "description": "检索类型：keyword=关键词搜索, doi=按DOI精确查找（仅接受DOI格式如10.xxxx/xxxxx，NASA报告编号/普通文本请用keyword）, title=按标题搜索",
                 "default": "keyword",
             },
             "per_page": {
@@ -190,7 +190,7 @@ class WebSearchTool(Action):
         try:
             resp = await client.get(url, headers=headers)
             if resp.status_code == 404:
-                return [{"error": f"DOI 未找到：{doi}"}]
+                return [{"error": f"DOI not found: '{doi}'. If this is a report number or keyword (not a DOI), retry with search_type='keyword'."}]
             resp.raise_for_status()
             data = resp.json()
             return self._parse_works([data]) if data.get("id") else [{"error": "无结果"}]
@@ -285,14 +285,14 @@ class WebSearchTool(Action):
     ) -> str:
         """格式化检索结果为 Markdown。"""
         if not results:
-            return f"🔍 未找到与 '{query}' 相关的外部文献。"
+            return f"[web_search] No results for '{query}'."
 
         if len(results) == 1 and "error" in results[0]:
-            return f"❌ 检索失败：{results[0]['error']}"
+            return f"[web_search] Failed: {results[0]['error']}"
 
         lines = [
-            f"## 🔍 外部文献检索：'{query}'",
-            f"**数据源**：OpenAlex | **结果数**：{len(results)} 篇\n",
+            f"## Web Search: '{query}'",
+            f"**Source**: OpenAlex | **Results**: {len(results)} papers\n",
         ]
 
         for i, r in enumerate(results, 1):

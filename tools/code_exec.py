@@ -32,9 +32,10 @@ class CodeExecutionTool(Action):
     description = (
         "执行 Python 代码并返回结果。适用于：复杂数值计算、数据拟合、"
         "快速可视化（matplotlib）、参数扫掠、量纲检查、公式验证。"
-        "代码在隔离子进程中运行，超时 30 秒自动终止。"
-        "如需保存图片，使用 plt.savefig() 指定完整路径。"
+        "代码在隔离子进程中运行（无头环境，plt.show() 自动忽略）。"
+        "保存图片用 plt.savefig('filename.png')，图片会保留在 outputs/ 目录。"
         "所需包不存在时会自动 pip install。"
+        "超时默认 60 秒，复杂计算可设 timeout=120。"
     )
     parameters = {
         "type": "object",
@@ -65,18 +66,22 @@ class CodeExecutionTool(Action):
         "required": ["code"],
     }
 
-    def __init__(self, timeout: int = 30):
+    def __init__(self, timeout: int = 60):
         self.default_timeout = timeout
-        # 创建临时工作目录
-        self._work_dir = Path(tempfile.mkdtemp(prefix="agent_exec_"))
+        # 持久化工作目录：每次执行用时间戳子文件夹，图片不会丢失
+        from datetime import datetime
+        self._output_root = Path(__file__).parent.parent / "outputs"
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self._work_dir = self._output_root / f"exec_{ts}"
+        self._work_dir.mkdir(parents=True, exist_ok=True)
 
     async def run(
         self,
         code: str,
-        timeout: int = 30,
+        timeout: int = 60,
         install_packages: list[str] | None = None,
     ) -> str:
-        timeout = min(timeout, 120)
+        timeout = min(timeout, 180)  # 最大 3 分钟，够画图
 
         # ── 预安装包 ────────────────────────────────
         install_log = ""
@@ -103,6 +108,8 @@ class CodeExecutionTool(Action):
         # ── 执行 ─────────────────────────────────────
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
+        env["MPLBACKEND"] = "Agg"  # 无头环境，避免 plt.show() 阻塞
+        env["PYTHONIOENCODING"] = "utf-8"  # 避免 print() 中文/特殊字符 GBK 崩溃
         # 把项目根加入 path，方便 import 项目内模块
         project_root = str(Path(__file__).parent.parent.parent)
         existing_path = env.get("PYTHONPATH", "")
@@ -119,45 +126,46 @@ class CodeExecutionTool(Action):
             )
         except subprocess.TimeoutExpired:
             return (
-                f"⏱️ **执行超时**（{timeout}s）\n"
-                f"代码未在 {timeout} 秒内完成，已被终止。\n"
-                f"建议：检查是否有无限循环，或增加 timeout 参数。"
+                f"[TIMEOUT] Execution timeout ({timeout}s)\n"
+                f"Code did not finish within {timeout}s. Check for infinite loops."
             )
         except Exception as e:
-            return f"❌ **执行异常**：{e}"
+            return f"[ERROR] Execution exception: {e}"
 
         # ── 构建返回 ─────────────────────────────────
         lines = []
 
         if install_log:
-            lines.append(f"📦 **包安装**：\n{install_log}")
+            lines.append(f"[pip] Installed:\n{install_log}")
 
         # stdout
         stdout = proc.stdout.strip()
         if stdout:
             preview = stdout
             if len(preview) > 3000:
-                preview = preview[:3000] + "\n... (输出截断，完整长度 {} 字符)".format(len(stdout))
-            lines.append(f"📤 **stdout**：\n```\n{preview}\n```")
+                preview = preview[:3000] + "\n... (truncated, full length {} chars)".format(len(stdout))
+            lines.append(f"[stdout]:\n```\n{preview}\n```")
         else:
-            lines.append("📤 **stdout**：（无输出）")
+            lines.append("[stdout]: (no output)")
 
         # stderr
         stderr = proc.stderr.strip()
         if stderr:
             preview = stderr
             if len(preview) > 1000:
-                preview = preview[:1000] + "\n... (截断)"
-            lines.append(f"⚠️ **stderr**：\n```\n{preview}\n```")
+                preview = preview[:1000] + "\n... (truncated)"
+            lines.append(f"[stderr]:\n```\n{preview}\n```")
 
         # 退出码
-        lines.append(f"🔢 **退出码**：{proc.returncode}")
+        lines.append(f"[exit code]: {proc.returncode}")
 
-        # 检查是否有生成的图片文件
+        # 检查生成的图片文件
         image_files = list(self._work_dir.glob("*.png")) + list(self._work_dir.glob("*.jpg"))
         if image_files:
-            lines.append(f"🖼️ **生成图片**：{', '.join(f.name for f in image_files)}")
-            lines.append(f"📁 位置：{self._work_dir}")
+            lines.append(f"[generated images]:")
+            for f in image_files:
+                lines.append(f"  -> {f}  ({f.stat().st_size / 1024:.1f} KB)")
+            lines.append(f"[save path]: {self._work_dir}")
 
         return "\n".join(lines)
 

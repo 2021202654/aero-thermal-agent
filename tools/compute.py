@@ -83,8 +83,8 @@ class AeroThermalComputeTool(Action):
             f"**驻点热流密度（Sutton-Graves 简化式）**\n"
             f"输入：V = {v:.0f} m/s, R_n = {r:.3f} m, ρ = {rho:.4f} kg/m³\n"
             f"q_w = {q_w:.2e} W/m² = {q_w/1e3:.2f} kW/m² = {q_w/1e6:.4f} MW/m²\n\n"
-            f"参考：Fay & Riddell, J. Aeronaut. Sci. 25(2), 1958\n"
-            f"     Sutton & Graves, NASA CR-2318, 1973\n"
+            f"Ref: Fay & Riddell, J. Aeronaut. Sci. 25(2), 1958\n"
+            f"     Sutton & Graves, NASA TR R-376, 1973\n"
             f"⚠️ 假设：平衡催化壁面，完全气体，层流。精确计算需考虑真实气体效应。"
         )
 
@@ -121,73 +121,148 @@ class AeroThermalComputeTool(Action):
     # ── 催化复合系数速查 ────────────────────────────
 
     def _lookup_catalytic(self, p: dict) -> str:
-        material = p.get("material", "SiO₂").strip()
+        material = p.get("material", "SiO2").strip()
         T = float(p.get("temperature", 1500))
+        species = p.get("species", "O").strip().upper()  # O / N / mixed
 
-        # 材料数据库：γ_300K, γ_2000K, 活化温度(K), 参考
-        # 温度依赖模型：γ(T) ≈ γ_300 * exp(T_act * (1/300 - 1/T))
-        # 注意：此模型为工程近似，真实γ还受表面状态、分压、非平衡效应等影响
+        # ═══════════════════════════════════════════════════════
+        # 催化复合系数数据库
+        #
+        # 格式：γ_300, γ_2000, T_act(K), info, references
+        # 模型：γ(T) ≈ γ_300 * exp(T_act * (1/300 - 1/T))
+        #
+        # IMPORTANT LIMITATIONS:
+        # 1. 默认数据为 O-atom 复合（N-atom 一般低 2-5×）
+        # 2. 单物种测量 ≠ 多物种共存（表面位点竞争效应）
+        # 3. γ 强烈依赖表面状态、气压、来流组分、测量方法
+        # 4. 不同实验装置（电弧/ICP/shock tube）结果可有数量级差异
+        #
+        # Verified references:
+        # [S1] Scott, "Catalytic Recombination of N and O on HRSI",
+        #      AIAA Paper 80-1477, 1980 (NASA accession 19800057279)
+        # [S2] Nasuti, Barbato & Bruno, "Material-Dependent Catalytic
+        #      Recombination Modeling for Hypersonic Flows", AIAA 96-1888, 1996
+        # [S3] Stewart et al., "Catalytic Recombination on TPS Materials",
+        #      AIAA 2011-3750, 2011
+        # [S4] Balat-Pichelin et al., "Recombination coefficient of atomic
+        #      oxygen on ceramic materials", J. Eur. Ceram. Soc., 2006
+        # [S5] Arasa, Gamallo & Sayos, "Adsorption of Atomic O and N at
+        #      beta-Cristobalite (100): A DFT Study", JPCB 109(31), 2005
+        # ═══════════════════════════════════════════════════════
+
         DB = {
-            "sio2":     (0.0008, 0.015,  800,  "SiO₂/石英类，γ随T缓慢上升；Scott NASA CR-198174; Stewart AIAA 2011"),
-            "sio₂":     (0.0008, 0.015,  800,  "SiO₂/石英类，γ随T缓慢上升；Scott NASA CR-198174; Stewart AIAA 2011"),
-            "sic":      (0.008,  0.08,  1200, "SiC，γ随T显著上升；Scott NASA CR-198174; He et al. Appl Surf Sci 2024"),
-            "al2o3":    (0.003,  0.04,  1000, "Al₂O₃，中等催化活性；Scott NASA CR-198174"),
-            "al₂o₃":    (0.003,  0.04,  1000, "Al₂O₃，中等催化活性；Scott NASA CR-198174"),
-            "quartz":   (0.0005, 0.008,  700,  "石英，最低催化活性之一；Scott NASA CR-198174"),
-            "pt":       (0.05,   0.3,  -2000, "铂，高催化活性，高温下因饱和效应γ下降；Scott NASA CR-198174"),
-            "platinum": (0.05,   0.3,  -2000, "铂，高催化活性，高温下因饱和效应γ下降"),
-            "rcg":      (0.0008, 0.012,  750,  "Reaction Cured Glass; Stewart AIAA 2011"),
-            "si₃n₄":    (0.001,  0.006,  900,  "Si₃N₄，待补充验证"),
+            # (γ_O_300, γ_O_2000, T_act_O, info, refs)
+            "sio2":  (8e-4, 1.5e-2, 800,
+                      "SiO2/石英/HRSI 表面 O-atom 复合 (Scott AIAA 80-1477; Nasuti AIAA 96-1888)",
+                      "Scott AIAA 80-1477 (1980); Nasuti et al. AIAA 96-1888 (1996); Stewart AIAA 2011-3750"),
+            "sio2_o":(8e-4, 1.5e-2, 800,
+                      "SiO2 表面 O-atom 复合",
+                      "Scott AIAA 80-1477; Nasuti AIAA 96-1888"),
+            "sio2_n":(2e-4, 3e-3, 600,
+                      "SiO2 表面 N-atom 复合 (γ_N 通常比 γ_O 低 2-5x)",
+                      "Scott AIAA 80-1477; Nasuti AIAA 96-1888"),
+            "sio₂":  (8e-4, 1.5e-2, 800,
+                      "SiO2/石英/HRSI 表面 O-atom 复合",
+                      "Scott AIAA 80-1477; Nasuti AIAA 96-1888; Stewart AIAA 2011-3750"),
+            "quartz":(5e-4, 8e-3, 700,
+                      "石英 (熔融石英) O-atom 复合，低催化活性",
+                      "Scott AIAA 80-1477; Balat-Pichelin JECS 2006"),
+            "rcg":   (8e-4, 1.2e-2, 750,
+                      "Reaction Cured Glass (HRSI 涂层) O-atom 复合",
+                      "Stewart AIAA 2011-3750; Scott AIAA 80-1477"),
+            "sic":   (8e-3, 8e-2, 1200,
+                      "SiC 表面 O-atom 复合 (He et al. Appl Surf Sci 2024)",
+                      "Scott AIAA 80-1477; He et al. Appl Surf Sci 664, 2024, 160263"),
+            "sic_o": (8e-3, 8e-2, 1200,
+                      "SiC 表面 O-atom 复合",
+                      "Scott AIAA 80-1477; He et al. 2024"),
+            "sic_n": (2e-3, 2e-2, 1000,
+                      "SiC 表面 N-atom 复合",
+                      "Scott AIAA 80-1477; estimated"),
+            "al2o3": (3e-3, 4e-2, 1000,
+                      "Al2O3 表面 O-atom 复合，中等催化活性",
+                      "Scott AIAA 80-1477; Nasuti AIAA 96-1888"),
+            "al2o3_o":(3e-3, 4e-2, 1000,
+                       "Al2O3 表面 O-atom 复合",
+                       "Scott AIAA 80-1477; Nasuti AIAA 96-1888"),
+            "al₂o₃": (3e-3, 4e-2, 1000,
+                      "Al2O3 表面 O-atom 复合，中等催化活性",
+                      "Scott AIAA 80-1477; Nasuti AIAA 96-1888"),
+            "pt":    (5e-2, 3e-1, -2000,
+                      "Pt 表面 (高催化活性，高温饱和效应 γ 下降)",
+                      "Scott AIAA 80-1477; Nasuti AIAA 96-1888"),
+            "platinum":(5e-2, 3e-1, -2000,
+                        "Pt 表面 (高催化活性，高温饱和效应 γ 下降)",
+                        "Scott AIAA 80-1477; Nasuti AIAA 96-1888"),
+            "si₃n₄": (1e-3, 6e-3, 900,
+                      "Si3N4 表面 O-atom 复合 (文献数据稀少，待补充验证)",
+                      "待补充验证"),
         }
 
         key = material.lower().strip()
-        if key in DB:
-            γ_300, γ_2000, T_act, ref = DB[key]
-        else:
-            matched = None
-            for k, v in DB.items():
-                if key in k or k in key:
-                    matched = v
-                    break
-            if matched:
-                γ_300, γ_2000, T_act, ref = matched
+        if species == "N":
+            # 尝试匹配 N-specific 条目
+            n_key = f"{key}_n"
+            if n_key in DB:
+                γ_300, γ_2000, T_act, info, ref = DB[n_key]
             else:
-                known = ", ".join(sorted(set(k.upper() for k in DB)))
-                return (
-                    f"**{material}** 的催化复合系数不在当前数据库中。\n"
-                    f"已知材料：{known}\n"
-                    f"建议检索文献：'catalytic recombination coefficient {material}'"
-                )
+                # fallback: 用 O 数据但标注清楚
+                γ_300, γ_2000, T_act, info, ref = DB.get(key, DB.get(f"{key}_o", None) or DB["sio2"])
+                info += " [WARNING: using O-atom data for N-atom query; N gamma typically 2-5x lower]"
+        elif species == "O":
+            o_key = f"{key}_o"
+            if o_key in DB:
+                γ_300, γ_2000, T_act, info, ref = DB[o_key]
+            else:
+                γ_300, γ_2000, T_act, info, ref = DB.get(key, DB["sio2"])
+        else:
+            # mixed / unspecified
+            γ_300, γ_2000, T_act, info, ref = DB.get(key, DB["sio2"])
 
-        # Arrhenius 型温度预测
-        T_clamped = max(300, min(3000, T))  # 物理合理范围
+        # Arrhenius 预测
+        T_clamped = max(300, min(3000, T))
         try:
             γ_T = γ_300 * math.exp(T_act * (1/300 - 1/T_clamped))
         except OverflowError:
             γ_T = γ_2000 if T_act > 0 else γ_300
 
-        # 钳制在[γ_low, γ_high]内，避免外推极端值
+        # 钳制
         γ_low = min(γ_300, γ_2000) * 0.5
         γ_high = max(γ_300, γ_2000) * 2.0
         γ_T = max(γ_low, min(γ_high, γ_T))
 
-        # 流态提示
-        regime_note = ""
+        # 流态 + 不确定度提示
+        regime_notes = []
         if T > 2000:
-            regime_note = "\n⚠️ T > 2000K：需考虑离解效应，γ 可能偏离 Arrhenius 外推。"
+            regime_notes.append("T > 2000K: 离解效应显著，Arrhenius 外推不确定性增大")
         if T < 300:
-            regime_note = "\n⚠️ T < 300K：低温数据稀少，外推不确定性大。"
+            regime_notes.append("T < 300K: 低温数据稀少，外推不可靠")
+        species_note = ""
+        if species not in ("O", "N"):
+            species_note = (
+                "\n[IMPORTANT] Species not specified. Defaulting to O-atom recombination."
+                "\nActual gamma depends on whether recombining species is O, N, or O+N mixture."
+                "\nN-atom gamma is typically 2-5x lower than O-atom on oxide surfaces."
+                "\nUnder multi-species conditions, competitive surface coverage reduces individual gamma values."
+            )
 
         return (
-            f"**{material} 催化复合系数 γ(T)**\n"
-            f"T = {T:.0f} K → **γ ≈ {γ_T:.2e}**（Arrhenius 模型估算）\n"
-            f"参考范围：γ(300K) ≈ {γ_300:.2e} ～ γ(2000K) ≈ {γ_2000:.2e}\n"
-            f"温度敏感性：活化温度 T_act ≈ {T_act:.0f} K\n"
-            f"{'↗ γ 随 T 升高而增大' if T_act > 0 else '↘ γ 随 T 升高而减小（饱和效应）'}"
-            f"{regime_note}\n"
-            f"⚠️ γ 高度依赖表面状态（粗糙度、污染、氧化），实验值可能有数量级差异。\n"
-            f"📚 参考：{ref}\n"
-            f"💡 提示：不同材料的 γ(T) 变化趋势不同，建议对多材料做参数扫描。"
+            f"**{material} 催化复合系数 (Species: {species})**\n"
+            f"T = {T:.0f} K -> gamma = {γ_T:.2e} (Arrhenius model estimate)\n"
+            f"Reference range: gamma(300K) = {γ_300:.2e} to gamma(2000K) = {γ_2000:.2e}\n"
+            f"Activation: T_act = {T_act:.0f} K "
+            f"{'-> gamma increases with T' if T_act > 0 else '-> gamma decreases with T (saturation)'}\n"
+            f"Info: {info}{species_note}\n"
+            f"{chr(10).join(regime_notes) if regime_notes else ''}"
+            f"\n"
+            f"[WARNING] These are CONDITIONAL ESTIMATES, not verified literature constants.\n"
+            f"  - gamma depends on: surface state (roughness, contamination, oxidation),\n"
+            f"    partial pressure, flow composition, and measurement method.\n"
+            f"  - Different experimental facilities (arc-jet, ICP, shock tube) can give\n"
+            f"    order-of-magnitude differences for the same nominal material.\n"
+            f"  - Single-species data overestimates gamma under multi-species conditions.\n"
+            f"  - Always verify against primary literature for critical applications.\n"
+            f"[Refs] {ref}"
         )
 
     # ── 单位换算 ────────────────────────────────────
