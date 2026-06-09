@@ -187,3 +187,26 @@ LLM 角色：
 | 记忆存储 | 短期滑动窗口 + 工作记忆KV（已实现），长期记忆待扩展 | 🟡 |
 | 前端 | Gradio（已有web_ablation.py可复用） | 🟡 |
 | MCP协议 | 不需要，Function Calling足够 | ✅ |
+
+---
+
+## 七、外部对标：Robin (Nature 2026)
+
+> Ghareeb et al., *A multi-agent system for automating scientific discovery*, Nature (2026).
+> 全文：`06_论文工作区/01_参考文献/SFT参考文献/Phase7_Agent系统设计/2026_Nature_Robin_Multi-Agent_Scientific_Discovery.pdf`
+
+### 架构对照
+
+| Robin | 本项目 Agent | 对应关系 |
+|-------|-------------|------|
+| Crow（快速文献检索，PaperQA2，~400篇/query） | LiteratureSearchTool + WebSearchTool | 文献检索层 |
+| Falcon（深度单题综述报告） | ReportTool | 报告生成层 |
+| Finch（实验数据分析，8轨迹并行+共识合成） | AeroThermalComputeTool + CodeExecutionTool | 计算分析层 |
+| Robin 编排层（迭代：假设→实验→分析→新假设） | core/orchestrator.py（ReAct + Plan-Execute） | 编排层 |
+
+### 可借鉴的设计
+
+1. **文献接地抗幻觉**：Robin 消融实验证明，去掉文献检索 agent 后幻觉率从 0% → 44.5%。直接支撑本项目 RAG 作为幻觉防火墙的论述（评测集 G3 维度）。
+2. **多轨迹共识**：Finch 8 条独立分析轨迹 + meta-analysis 取共识，优于简单多次跑取中位数。可作为 Agent 评测方法论改进方向。
+3. **LLM-judged tournament**：用 Claude Sonnet 做 head-to-head 评判排序候选方案，可用于本项目多方案对比评测。
+4. **逐个拆除消融范式**：Robin 的 "去掉 Crow / 去掉 Falcon / 全去掉" 与本项目评测集 C1-C5 配置消融矩阵方法论一致，可互为引用支撑。
