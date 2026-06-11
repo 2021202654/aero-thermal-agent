@@ -1,8 +1,8 @@
 """
-物理约束验证层 —— 气固界面核心物理方程与边界条件
+Physics Constraint Validation Layer — Gas-Solid Interface Core Physics Equations and Boundary Conditions
 
-纯规则验证，不依赖 LLM。
-用于在假设生成后检验是否符合物理定律，过滤违反基本约束的假设。
+Pure-rule validation, no LLM dependency.
+Used after hypothesis generation to verify compliance with physical laws and filter out hypotheses that violate basic constraints.
 """
 
 from __future__ import annotations
@@ -11,127 +11,127 @@ from typing import Any
 
 
 class PhysicsConstraintLayer:
-    """气固界面物理约束验证层。
+    """Gas-solid interface physics constraint validation layer.
 
-    覆盖：
-    - 参数值域约束（γ, σ_v, σ_T 等必须在物理范围内）
-    - 流态判断约束（Kn 数 → 流态映射）
-    - 守恒律简化检验（能量/质量/动量）
-    - 模型适用范围约束（Fay-Riddell, DSMC 等）
+    Covers:
+    - Parameter value range constraints (gamma, sigma_v, sigma_T must be within physical ranges)
+    - Flow regime judgment constraints (Kn number → flow regime mapping)
+    - Conservation law simplified checks (energy / mass / momentum)
+    - Model applicability constraints (Fay-Riddell, DSMC, etc.)
     """
 
-    # ── 参数物理边界 ──────────────────────────────
+    # ── Parameter Physical Bounds ─────────────────────
 
     PARAM_BOUNDS: dict[str, dict[str, Any]] = {
         "catalytic_efficiency": {
-            "symbol": "γ",
+            "symbol": "gamma",
             "min": 0.0,
             "max": 1.0,
             "unit": "-",
-            "description": "催化复合效率，0=完全非催化，1=完全催化",
+            "description": "Catalytic recombination efficiency, 0=fully non-catalytic, 1=fully catalytic",
         },
         "momentum_accommodation": {
-            "symbol": "σ_v",
+            "symbol": "sigma_v",
             "min": 0.0,
             "max": 1.0,
             "unit": "-",
-            "description": "动量协调系数",
+            "description": "Momentum accommodation coefficient",
         },
         "energy_accommodation": {
-            "symbol": "σ_T",
+            "symbol": "sigma_T",
             "min": 0.0,
             "max": 1.0,
             "unit": "-",
-            "description": "能量协调系数（温度跳跃系数）",
+            "description": "Energy accommodation coefficient (temperature jump coefficient)",
         },
         "knudsen": {
             "symbol": "Kn",
             "min": 0.0,
             "max": 1e6,
             "unit": "-",
-            "description": "克努森数 λ/L",
+            "description": "Knudsen number lambda/L",
         },
         "mach": {
             "symbol": "Ma",
             "min": 0.0,
             "max": 50.0,
             "unit": "-",
-            "description": "马赫数，高超声速通常 Ma > 5",
+            "description": "Mach number; hypersonic typically Ma > 5",
         },
         "temperature": {
             "symbol": "T",
             "min": 0.0,
             "max": 50000.0,
             "unit": "K",
-            "description": "温度",
+            "description": "Temperature",
         },
         "pressure": {
             "symbol": "p",
             "min": 0.0,
             "max": 1e9,
             "unit": "Pa",
-            "description": "压力",
+            "description": "Pressure",
         },
         "heat_flux": {
             "symbol": "q_w",
             "min": 0.0,
             "max": 1e9,
-            "unit": "W/m²",
-            "description": "壁面热流密度",
+            "unit": "W/m^2",
+            "description": "Wall heat flux density",
         },
         "stagnation_enthalpy": {
             "symbol": "h_0",
             "min": 0.0,
             "max": 5e7,
             "unit": "J/kg",
-            "description": "驻点焓",
+            "description": "Stagnation enthalpy",
         },
     }
 
-    # ── Kn → 流态映射 ──────────────────────────────
+    # ── Kn → Flow Regime Mapping ───────────────────
 
     FLOW_REGIMES: list[dict[str, Any]] = [
-        {"name": "continuum", "label": "连续流", "kn_min": 0.0, "kn_max": 0.001,
-         "model": "Navier-Stokes（无滑移边界）"},
-        {"name": "slip", "label": "滑移流", "kn_min": 0.001, "kn_max": 0.1,
-         "model": "NS + 滑移/温度跳跃边界条件"},
-        {"name": "transition", "label": "过渡流", "kn_min": 0.1, "kn_max": 10.0,
-         "model": "DSMC / Boltzmann 方程"},
-        {"name": "free_molecular", "label": "自由分子流", "kn_min": 10.0, "kn_max": 1e6,
-         "model": "自由分子流理论"},
+        {"name": "continuum", "label": "Continuum", "kn_min": 0.0, "kn_max": 0.001,
+         "model": "Navier-Stokes (no-slip BC)"},
+        {"name": "slip", "label": "Slip Flow", "kn_min": 0.001, "kn_max": 0.1,
+         "model": "NS + slip/temperature-jump BC"},
+        {"name": "transition", "label": "Transition", "kn_min": 0.1, "kn_max": 10.0,
+         "model": "DSMC / Boltzmann equation"},
+        {"name": "free_molecular", "label": "Free Molecular", "kn_min": 10.0, "kn_max": 1e6,
+         "model": "Free molecular flow theory"},
     ]
 
-    # ── 模型适用范围 ──────────────────────────────
+    # ── Model Applicability Ranges ─────────────────
 
     MODEL_RANGES: dict[str, dict[str, Any]] = {
         "fay_riddell": {
-            "description": "Fay-Riddell 驻点热流公式",
-            "applicable": "平衡催化壁面，连续流，层流",
+            "description": "Fay-Riddell stagnation-point heat flux formula",
+            "applicable": "Equilibrium catalytic wall, continuum, laminar",
             "kn_max": 0.01,
             "requires": ["equilibrium_catalytic_wall"],
         },
         "sutton_graves": {
-            "description": "Sutton-Graves 简化驻点热流",
-            "applicable": "工程估算，完全催化壁面",
+            "description": "Sutton-Graves simplified stagnation-point heat flux",
+            "applicable": "Engineering estimate, fully catalytic wall",
             "kn_max": 0.01,
         },
         "dsmc": {
-            "description": "直接仿真蒙特卡罗",
-            "applicable": "稀薄气体，Kn > 0.01",
+            "description": "Direct Simulation Monte Carlo",
+            "applicable": "Rarefied gas, Kn > 0.01",
             "kn_min": 0.01,
         },
         "maxwell_slip": {
-            "description": "Maxwell 滑移边界条件",
-            "applicable": "滑移流，0.001 < Kn < 0.1",
+            "description": "Maxwell slip boundary condition",
+            "applicable": "Slip flow regime, 0.001 < Kn < 0.1",
             "kn_min": 0.001,
             "kn_max": 0.1,
         },
     }
 
-    # ── 初始化 ────────────────────────────────────
+    # ── Initialization ─────────────────────────────
 
     def __init__(self):
-        # 别名映射：支持多种参数名写法
+        # Alias mapping: support multiple parameter name variants
         self._aliases: dict[str, str] = {
             "gamma": "catalytic_efficiency",
             "γ": "catalytic_efficiency",
@@ -154,34 +154,34 @@ class PhysicsConstraintLayer:
             "h_0": "stagnation_enthalpy",
         }
 
-    # ── 公开接口 ──────────────────────────────────
+    # ── Public Interface ───────────────────────────
 
     def validate_hypothesis(
         self,
         hypothesis_text: str,
         params: dict[str, Any] | None = None,
     ) -> tuple[bool, str]:
-        """验证假设是否违反物理定律。
+        """Validate whether a hypothesis violates physical laws.
 
         Args:
-            hypothesis_text: 假设文本
-            params: 假设中涉及的物理参数 dict
+            hypothesis_text: Hypothesis text
+            params: Dict of physical parameters mentioned in the hypothesis
 
         Returns:
-            (valid, reason): 是否通过 + 原因说明
+            (valid, reason): Whether it passes + reason explanation
         """
         if params is None:
             params = {}
 
         violations: list[str] = []
 
-        # 1. 参数值域检查
+        # 1. Parameter value range check
         for param_name, value in params.items():
             ok, msg = self._check_value_bounds(param_name, value)
             if not ok:
                 violations.append(msg)
 
-        # 2. 流态一致性检查
+        # 2. Flow regime consistency check
         kn = self._resolve_param(params, "knudsen")
         regime = params.get("flow_regime", "").lower() if isinstance(params.get("flow_regime"), str) else ""
         if kn is not None and regime:
@@ -189,34 +189,34 @@ class PhysicsConstraintLayer:
             if not ok:
                 violations.append(msg)
 
-        # 3. 守恒律检查
+        # 3. Conservation law check
         ok, msg = self._check_conservation(params)
         if not ok:
             violations.append(msg)
 
-        # 4. 文本级约束检查（关键词扫描）
+        # 4. Text-level constraint check (keyword scan)
         text_violations = self._check_text_constraints(hypothesis_text)
         violations.extend(text_violations)
 
         if violations:
-            reason = "；".join(violations)
+            reason = "; ".join(violations)
             return False, reason
 
-        return True, "通过物理约束检验"
+        return True, "Passed physics constraint validation"
 
     def get_regime(self, kn: float) -> dict[str, Any]:
-        """根据 Kn 数返回流态信息。"""
+        """Return flow regime info given Kn number."""
         for regime in self.FLOW_REGIMES:
             if regime["kn_min"] <= kn < regime["kn_max"]:
                 return regime
-        # Kn 极大
+        # Kn extremely large
         return self.FLOW_REGIMES[-1]
 
     def get_model_applicability(self, model_name: str, kn: float | None = None) -> dict[str, Any]:
-        """检查模型在给定条件下的适用性。"""
+        """Check model applicability under given conditions."""
         model = self.MODEL_RANGES.get(model_name.lower().replace("-", "_"))
         if model is None:
-            return {"applicable": None, "reason": f"未知模型: {model_name}"}
+            return {"applicable": None, "reason": f"Unknown model: {model_name}"}
 
         if kn is not None:
             kn_min = model.get("kn_min", 0.0)
@@ -224,27 +224,27 @@ class PhysicsConstraintLayer:
             if kn < kn_min or kn > kn_max:
                 return {
                     "applicable": False,
-                    "reason": f"{model['description']}：Kn={kn:.4e} 不在适用范围 [{kn_min}, {kn_max}]",
+                    "reason": f"{model['description']}: Kn={kn:.4e} outside applicable range [{kn_min}, {kn_max}]",
                 }
 
         return {"applicable": True, "reason": model["applicable"]}
 
     def format_constraints_brief(self) -> str:
-        """返回约束简述，供 prompt 注入。"""
-        lines = ["气固界面物理约束："]
+        """Return concise constraint summary for prompt injection."""
+        lines = ["Gas-solid interface physics constraints:"]
         for key, info in self.PARAM_BOUNDS.items():
             lines.append(
-                f"  {info['symbol']}（{key}）∈ [{info['min']}, {info['max']}] {info['unit']} — {info['description']}"
+                f"  {info['symbol']} ({key}) in [{info['min']}, {info['max']}] {info['unit']} -- {info['description']}"
             )
-        lines.append("流态判定：")
+        lines.append("Flow regime determination:")
         for r in self.FLOW_REGIMES:
-            lines.append(f"  Kn ∈ [{r['kn_min']}, {r['kn_max']}) → {r['label']}（{r['model']}）")
+            lines.append(f"  Kn in [{r['kn_min']}, {r['kn_max']}) -> {r['label']} ({r['model']})")
         return "\n".join(lines)
 
-    # ── 内部方法 ──────────────────────────────────
+    # ── Internal Methods ─────────────────────────────
 
     def _resolve_param(self, params: dict, canonical_name: str) -> Any | None:
-        """从参数 dict 中解析值（支持别名）。"""
+        """Resolve value from parameter dict (supports aliases)."""
         if canonical_name in params:
             return params[canonical_name]
         for alias, canonical in self._aliases.items():
@@ -253,30 +253,29 @@ class PhysicsConstraintLayer:
         return None
 
     def _check_value_bounds(self, param_name: str, value: Any) -> tuple[bool, str]:
-        """检查参数值是否在物理范围内。"""
+        """Check whether parameter value is within physical range."""
         canonical = self._aliases.get(param_name, param_name)
         bounds = self.PARAM_BOUNDS.get(canonical)
         if bounds is None:
-            return True, ""  # 未知参数，不检查
+            return True, ""  # Unknown parameter, skip check
 
         try:
             v = float(value)
         except (TypeError, ValueError):
-            return True, ""  # 非数值，跳过
+            return True, ""  # Non-numeric, skip
 
         if v < bounds["min"] or v > bounds["max"]:
             return (
                 False,
-                f"{bounds['symbol']}（{canonical}）= {v}，"
-                f"超出物理范围 [{bounds['min']}, {bounds['max']}] {bounds['unit']} — {bounds['description']}",
+                f"{bounds['symbol']} ({canonical}) = {v}, "
+                f"outside physical range [{bounds['min']}, {bounds['max']}] {bounds['unit']} -- {bounds['description']}",
             )
 
         return True, ""
 
     def _check_flow_regime(self, kn: float, claimed_regime: str) -> tuple[bool, str]:
-        """检查流态判断是否正确。"""
+        """Check whether flow regime judgment is correct."""
         actual = self.get_regime(kn)
-        # 宽松匹配：claimed_regime 包含 actual name 或 label
         actual_names = {actual["name"], actual["label"]}
 
         matched = False
@@ -288,38 +287,36 @@ class PhysicsConstraintLayer:
         if not matched:
             return (
                 False,
-                f"Kn={kn:.4e} 对应 {actual['label']}（{actual['name']}），"
-                f"但假设声称 '{claimed_regime}'，流态判断不一致",
+                f"Kn={kn:.4e} corresponds to {actual['label']} ({actual['name']}), "
+                f"but hypothesis claims '{claimed_regime}', flow regime judgment inconsistent",
             )
 
         return True, ""
 
     def _check_conservation(self, params: dict[str, Any]) -> tuple[bool, str]:
-        """守恒律简化检验。"""
-        # 能量守恒：q_w ≤ h_0（壁面热流不能超过驻点焓）
+        """Conservation law simplified check."""
+        # Energy conservation: q_w <= h_0 (wall heat flux cannot exceed stagnation enthalpy)
         q_w = self._resolve_param(params, "heat_flux")
         h0 = self._resolve_param(params, "stagnation_enthalpy")
         if q_w is not None and h0 is not None:
             try:
                 if float(q_w) > float(h0):
-                    return False, f"壁面热流 q_w={q_w} 超过驻点焓 h_0={h0}，违反能量守恒"
+                    return False, f"Wall heat flux q_w={q_w} exceeds stagnation enthalpy h_0={h0}, violates energy conservation"
             except (TypeError, ValueError):
                 pass
 
         return True, ""
 
     def _check_text_constraints(self, text: str) -> list[str]:
-        """文本级约束检查（关键词扫描）。"""
+        """Text-level constraint check (keyword scan)."""
         violations = []
         text_lower = text.lower()
 
-        # 超光速 / 超物理约束
+        # Faster-than-light / super-physical constraints
         impossible_patterns = [
-            ("超过光速", "速度不能超过光速"),
-            ("perpetual motion", "永动机违反热力学定律"),
-            ("永动机", "永动机违反热力学定律"),
-            ("efficiency > 100%", "效率不能超过 100%"),
-            ("效率 > 100%", "效率不能超过 100%"),
+            ("faster than light", "Speed cannot exceed the speed of light"),
+            ("perpetual motion", "Perpetual motion violates thermodynamics"),
+            ("efficiency > 100%", "Efficiency cannot exceed 100%"),
         ]
 
         for pattern, reason in impossible_patterns:

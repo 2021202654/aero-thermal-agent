@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-气固热导 AI Agent — Gradio Web UI
+AeroThermAI — Gradio Web UI
 
-用法：
-    # 连接本地 vLLM
+Usage:
+    # Connect to local vLLM
     python app.py --llm vllm_local
 
-    # 连接百炼 API
+    # Connect to Bailian API
     python app.py --llm bailian
 
-    # 自定义端点
+    # Custom endpoint
     python app.py --llm custom --base-url http://localhost:8000/v1
 
-    # 指定模式
+    # Specify mode
     python app.py --mode plan_execute
 
-DSW 部署时自动获得公网链接（Gradio proxy）。
+DSW deployment automatically provides a public URL (Gradio proxy).
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-# 路径
+# Path setup
 AGENT_DIR = Path(__file__).parent
 PROJECT = AGENT_DIR.parent
 sys.path.insert(0, str(AGENT_DIR))
@@ -44,20 +44,20 @@ from tools.report import ReportTool, ExportFindingTool
 from tools.pandoc_export import PandocExportTool
 
 
-# ── 全局 Agent 实例 ─────────────────────────────────
+# ── Global Agent Instance ────────────────────────────
 
 _agent = None
 _config = None
 
 
 def build_agent(llm: str = "vllm_local", mode: str = "react", verbose: bool = False):
-    """构建并装配 Agent。"""
+    """Build and equip the Agent."""
     global _agent, _config
 
     _config = AgentConfig(llm=llm, mode=mode, verbose=verbose)
     _agent = _config.build_agent()
 
-    # 装配全部 9 个工具
+    # Equip all 9 tools
     _agent.equip(LiteratureSearchTool())
     _agent.equip(WebSearchTool())
     _agent.equip(AeroThermalComputeTool())
@@ -71,39 +71,39 @@ def build_agent(llm: str = "vllm_local", mode: str = "react", verbose: bool = Fa
     return _agent
 
 
-# ── Chat 处理 ───────────────────────────────────────
+# ── Chat Handler ────────────────────────────────────
 
 
 async def respond(message: str, history: list):
-    """处理每轮对话。"""
+    """Handle each dialogue turn."""
     if _agent is None:
-        yield "⚠️ Agent 未初始化，请检查 LLM 连接配置。"
+        yield "Gradio Web UI — Hypersonic Aerothermodynamics Research Assistant"
         return
 
-    # Agent 内部自动管理记忆，history 参数仅用于 Gradio 显示
+    # Agent internally manages memory; history param is only used by Gradio for display
     try:
         reply = await _agent.run(message)
     except Exception as e:
-        yield f"❌ Agent 运行异常：{e}"
+        yield f"Agent execution error: {e}"
         return
 
     yield reply.content
 
 
-# ── 状态查看 ────────────────────────────────────────
+# ── Status Viewer ───────────────────────────────────
 
 
 def get_agent_info():
-    """返回 Agent 当前状态。"""
+    """Return current Agent status."""
     if _agent is None:
-        return "Agent 未初始化"
+        return "Agent not initialized"
 
     tools = _agent.registry.list_names()
     return (
         f"**LLM**: {_agent.llm.config.model} @ {_agent.llm.config.base_url}\n"
         f"**Mode**: {_agent.mode}\n"
         f"**Tools** ({len(tools)}): {', '.join(tools)}\n"
-        f"**Memory**: {len(_agent.memory.short)} 条消息"
+        f"**Memory**: {len(_agent.memory.short)} messages"
     )
 
 
@@ -111,78 +111,78 @@ def get_agent_info():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="气固热导 AI Agent — Gradio Web UI")
+    parser = argparse.ArgumentParser(description="AeroThermAI — Gradio Web UI")
     parser.add_argument(
         "--llm", "-l", type=str, default="vllm_local",
         choices=["vllm_local", "bailian", "ollama", "custom"],
-        help="LLM 后端选择",
+        help="LLM backend selection",
     )
     parser.add_argument(
         "--mode", "-m", type=str, default="react",
         choices=["react", "plan_execute"],
-        help="Agent 运行模式",
+        help="Agent running mode",
     )
     parser.add_argument(
         "--base-url", type=str, default=None,
-        help="覆盖 LLM API 地址（--llm custom 时必填）",
+        help="Override LLM API address (required when --llm custom)",
     )
     parser.add_argument(
         "--model", type=str, default=None,
-        help="覆盖 LLM 模型名",
+        help="Override LLM model name",
     )
     parser.add_argument(
         "--port", "-p", type=int, default=7860,
-        help="Gradio 服务端口（默认 7860）",
+        help="Gradio server port (default 7860)",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true", default=False,
-        help="打印工具调用详情",
+        help="Print tool call details",
     )
     parser.add_argument(
         "--share", action="store_true", default=False,
-        help="生成 Gradio 公网链接（非 DSW 环境用）",
+        help="Generate Gradio public URL (for non-DSW environments)",
     )
 
     args = parser.parse_args()
     llm = args.llm
     if llm == "custom" and not args.base_url:
-        parser.error("--llm custom 需要 --base-url")
+        parser.error("--llm custom requires --base-url")
 
-    # 构建 Agent
+    # Build Agent
     agent = build_agent(llm=llm, mode=args.mode, verbose=args.verbose)
     if args.model:
         agent.llm.config.model = args.model
     if args.base_url:
         agent.llm.config.base_url = args.base_url
 
-    # 标题与描述
-    title = "气固热导 AI Agent — 高超声速气动热物理研究助手"
+    # Title and description
+    title = "AeroThermAI — Hypersonic Aerothermodynamics Research Assistant"
     description = f"""
 **LLM**: {agent.llm.config.model} @ {agent.llm.config.base_url}
 **Mode**: {agent.mode} | **Tools**: {', '.join(agent.registry.list_names())}
 
-输入研究问题，Agent 自动检索文献、执行计算、生成报告。
+Enter a research question; the Agent will automatically retrieve literature, run computations, and generate reports.
 """
 
-    # 构建 UI
+    # Build UI
     demo = gr.ChatInterface(
         fn=respond,
         title=title,
         description=description,
         theme="soft",
         examples=[
-            "比较 SiO₂ 和 SiC 在 2000K 下的催化复合系数",
-            "计算马赫数15、高度55km、头部半径0.5m的驻点热流密度",
-            "搜索近3年高超声速边界层转捩的研究进展",
+            "Compare catalytic recombination coefficients of SiO2 and SiC at 2000 K",
+            "Calculate stagnation-point heat flux for Mach 15, altitude 55 km, nose radius 0.5 m",
+            "Search recent 3-year research progress on hypersonic boundary-layer transition",
         ],
-        undo_btn="撤销",
-        clear_btn="清空记忆",
+        undo_btn="Undo",
+        clear_btn="Clear Memory",
     )
 
-    print(f"[*] Agent 已就绪")
+    print(f"[*] Agent ready")
     print(f"    LLM: {agent.llm.config.model} @ {agent.llm.config.base_url}")
     print(f"    Mode: {agent.mode}")
-    print(f"    Tools: {len(agent.registry)} 个")
+    print(f"    Tools: {len(agent.registry)}")
     print(f"    Port: {args.port}")
     print()
 

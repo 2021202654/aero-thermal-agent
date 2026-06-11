@@ -71,3 +71,79 @@ python app.py --llm bailian
 | Ollama | `localhost:11434/v1` | 本地快速验证 |
 
 `config.py` 提供 4 套预设：`vllm_local` / `bailian` / `ollama` / `custom`
+
+---
+
+# 06 Deployment & Integration
+
+> Full-Stack Agent Deployment — DSW vLLM + Gradio
+
+---
+
+## Deployment Architecture
+
+```
+DSW Instance (V100 16GB / A10 24GB)
+├── vLLM API Server (localhost:8000)  ← Loads fine-tuned model aero-thermal-8b
+├── Agent Framework                   ← OpenAI-compatible client, 9 tools
+└── Gradio UI (0.0.0.0:7860)          ← DSW auto-provides public proxy URL
+```
+
+---
+
+## Deployment Entry Points
+
+| Entry | File | Purpose |
+|------|------|------|
+| CLI | `run_agent.py` | Interactive / single Q&A, `--llm` selects backend |
+| Gradio | `app.py` | Web UI, `--llm custom` connects to vLLM |
+
+### CLI Examples
+
+```bash
+cd 05_AI_Agent
+
+# Bailian API (ready to use)
+python run_agent.py --llm bailian
+
+# DSW vLLM
+python run_agent.py --llm custom --base-url http://localhost:8000/v1
+
+# Plan-Execute mode
+python run_agent.py --llm custom --mode plan_execute --task "Evaluate cross-scale applicability of gas-solid interface catalytic model"
+```
+
+### Gradio Web UI
+
+```bash
+# DSW deployment (auto gets public link)
+python app.py --llm custom --port 7860
+
+# Local development with Bailian
+python app.py --llm bailian
+```
+
+---
+
+## DSW Deployment Process
+
+Execute the 4 notebooks under `04_LLM微调线/04_推理部署/` in order:
+
+| Step | Notebook | Content |
+|------|----------|------|
+| 0 | `0_DSW环境部署.ipynb` | pip mirror + PyTorch CUDA + LLaMA-Factory + vLLM + Pandoc + Chinese fonts |
+| 1 | `1_模型下载与数据注册.ipynb` | ModelScope downloads Llama-3.1-8B + dataset registration + validation |
+| 2 | `2_训练与导出.ipynb` | QLoRA 4-bit training + LoRA merge and export |
+| 3 | `3_推理与Agent部署.ipynb` | vLLM startup + Agent config + Gradio UI launch |
+
+---
+
+## LLM Backends
+
+| Backend | Config | Use Case |
+|------|------|------|
+| vLLM (DSW) | `localhost:8000/v1` | Fine-tuned model inference |
+| Bailian API | `dashscope.aliyuncs.com` | Development / Debugging / QA generation |
+| Ollama | `localhost:11434/v1` | Local quick validation |
+
+`config.py` provides 4 presets: `vllm_local` / `bailian` / `ollama` / `custom`

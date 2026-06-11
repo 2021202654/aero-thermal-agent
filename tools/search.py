@@ -1,9 +1,9 @@
 """
-文献检索工具 —— Agent 最核心的能力
+Literature Search Tool — Core capability of the Agent
 
-支持两种检索路径：
-1. 向量语义检索（FAISS）：语义相关但关键词不一定匹配
-2. CSV 标题关键词检索：精确匹配标题中的术语（FAISS 不可用时的回退）
+Supports two retrieval pathways:
+1. Vector Semantic Search (FAISS): Semantic relevance without exact keyword matching
+2. CSV Title Keyword Search: Exact title matching (fallback when FAISS is unavailable)
 """
 
 from __future__ import annotations
@@ -19,24 +19,25 @@ from core.action import Action
 
 
 class LiteratureSearchTool(Action):
-    """文献检索工具 —— 在气固热导 3,326 篇文献库中检索。"""
+    """Literature Search Tool — Search within the 3,326-paper gas-solid thermal conduction literature corpus."""
 
     name = "search_literature"
     description = (
-        "在气固热导领域文献库中检索（共3,326篇，覆盖气动热力学、催化复合、"
-        "激波边界层干扰、非平衡流动、热防护等方向）。"
-        "输入检索关键词（英文），返回最相关的文献标题、年份、期刊和DOI。"
+        "Search the literature corpus in the field of gas-solid thermal conduction (3,326 papers total, covering "
+        "aerothermodynamics, catalytic recombination, shock wave boundary layer interaction, non-equilibrium "
+        "flows, thermal protection, and related areas). "
+        "Input search keywords (in English), return the most relevant paper titles, years, journals, and DOIs."
     )
     parameters = {
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "检索关键词或短语，英文。例如: 'catalytic recombination coefficient SiO2'",
+                "description": "Search keyword or phrase, in English. For example: 'catalytic recombination coefficient SiO2'",
             },
             "top_k": {
                 "type": "integer",
-                "description": "返回文献数量，默认5，最多20",
+                "description": "Number of results to return, default 5, maximum 20",
                 "default": 5,
             },
         },
@@ -54,7 +55,7 @@ class LiteratureSearchTool(Action):
         self._metadata = None
         self._csv_rows: list[dict[str, str]] = []
 
-    # ── 路径解析 ────────────────────────────────────
+    # ── Path Resolution ────────────────────────────────────
 
     @property
     def index_dir(self) -> Path:
@@ -70,7 +71,7 @@ class LiteratureSearchTool(Action):
         project = Path(__file__).parent.parent.parent
         return project / "03_知识工程" / "03_文献库" / "Final_Merged_Literature.csv"
 
-    # ── 延迟加载 ────────────────────────────────────
+    # ── Lazy Loading ────────────────────────────────────
 
     def _ensure_index_loaded(self):
         if self._index is not None:
@@ -84,7 +85,7 @@ class LiteratureSearchTool(Action):
                 with open(pkl_file, "rb") as f:
                     self._metadata = pickle.load(f)
             except Exception:
-                pass  # 静默回退到 CSV 检索
+                pass  # Silent fallback to CSV search
 
     def _ensure_csv_loaded(self):
         if self._csv_rows:
@@ -92,24 +93,24 @@ class LiteratureSearchTool(Action):
         csv_file = self.csv_path
         if not csv_file.exists():
             return
-        # 自动检测编码：UTF-8 → Latin-1 → GBK 依次尝试
+        # Auto-detect encoding: try UTF-8 → Latin-1 → GBK in order
         for encoding in ("utf-8", "latin-1", "gbk"):
             try:
                 with open(csv_file, "r", encoding=encoding) as f:
                     reader = csv.DictReader(f)
                     self._csv_rows = list(reader)
-                break  # 加载成功，退出编码尝试
+                break  # Load successful, exit encoding attempts
             except (UnicodeDecodeError, UnicodeError):
                 continue
 
-    # ── 检索入口 ────────────────────────────────────
+    # ── Search Entry Point ────────────────────────────────────
 
     async def run(self, query: str, top_k: int = 5) -> str:
         top_k = min(top_k, 20)
         results: list[dict[str, Any]] = []
         seen_titles: set[str] = set()
 
-        # Path 1: FAISS 语义检索
+        # Pathway 1: FAISS Semantic Search
         try:
             self._ensure_index_loaded()
             if self._index is not None:
@@ -119,9 +120,9 @@ class LiteratureSearchTool(Action):
                         results.append(r)
                         seen_titles.add(r.get("title", ""))
         except Exception as e:
-            pass  # 静默回退
+            pass  # Silent fallback
 
-        # Path 2: CSV 关键词检索（补充/回退）
+        # Pathway 2: CSV Keyword Search (supplement/fallback)
         try:
             self._ensure_csv_loaded()
             if self._csv_rows and len(results) < top_k:
@@ -134,26 +135,26 @@ class LiteratureSearchTool(Action):
             pass
 
         if not results:
-            return f"未找到与 '{query}' 相关的文献。建议尝试更广泛的关键词，或检查文献库路径配置。"
+            return f"No literature found related to '{query}'. Try broader keywords or check the literature corpus path configuration."
 
-        # 过滤：无DOI的结果不允许传递给LLM（防止幻觉引用）
+        # Filter: results without DOI are not allowed to pass to LLM (preventing hallucinated citations)
         valid_results = [r for r in results[:top_k] if r.get("doi", "").strip()]
         invalid_count = len(results[:top_k]) - len(valid_results)
         if invalid_count > 0:
-            filtered_note = f"（已过滤 {invalid_count} 条无DOI记录）"
+            filtered_note = f"(filtered {invalid_count} records without DOI)"
         else:
             filtered_note = ""
 
         if not valid_results:
-            return f"未找到与 '{query}' 相关且包含DOI的文献。请尝试其他关键词。{filtered_note}"
+            return f"No literature found related to '{query}' with DOI. Try different keywords.{filtered_note}"
 
         return self._format_results(query, valid_results) + filtered_note
 
-    # ── 检索实现 ────────────────────────────────────
+    # ── Search Implementation ────────────────────────────────────
 
     def _faiss_search(self, query: str, top_k: int) -> list[dict[str, Any]]:
-        """FAISS 语义检索。需要配置 embedding 模型才能激活。"""
-        # 实际部署时取消注释以下代码：
+        """FAISS semantic search. Requires embedding model configuration to activate."""
+        # Uncomment the following code for actual deployment:
         # import openai
         # client = openai.OpenAI(base_url="...", api_key="...")
         # q_vec = client.embeddings.create(model="text-embedding-3-small", input=query)
@@ -168,13 +169,13 @@ class LiteratureSearchTool(Action):
         #             "year": str(meta.get("year", "?")),
         #             "journal": meta.get("journal", ""),
         #             "doi": meta.get("doi", ""),
-        #             "score": f"语义相似度 {1-D[0][i]:.2f}",
+        #             "score": f"Semantic similarity {1-D[0][i]:.2f}",
         #         })
         # return results
-        return []  # 当前回退到 CSV 检索
+        return []  # Currently falling back to CSV search
 
     def _csv_keyword_search(self, query: str, top_k: int) -> list[dict[str, Any]]:
-        """CSV 标题+摘要关键词匹配。"""
+        """CSV title + abstract keyword matching."""
         keywords = query.lower().split()
         scored: list[tuple[int, dict[str, str]]] = []
 
@@ -190,11 +191,11 @@ class LiteratureSearchTool(Action):
 
         return [
             {
-                "title": row.get("Title", "无标题").strip('"'),
+                "title": row.get("Title", "Untitled").strip('"'),
                 "year": row.get("Year", "?"),
-                "journal": row.get("Journal", "未知期刊").strip('"'),
+                "journal": row.get("Journal", "Unknown journal").strip('"'),
                 "doi": row.get("DOI", ""),
-                "score": f"关键词命中 {score}/{len(keywords)}",
+                "score": f"Keyword hit {score}/{len(keywords)}",
             }
             for score, row in scored[:top_k]
         ]
@@ -203,7 +204,7 @@ class LiteratureSearchTool(Action):
         lines = [f"[search] '{query}' — {len(results)} results:\n"]
         for i, r in enumerate(results, 1):
             doi = r.get("doi", "")
-            doi_link = f"https://doi.org/{doi}" if doi else "无DOI"
+            doi_link = f"https://doi.org/{doi}" if doi else "No DOI"
             lines.append(
                 f"{i}. **{r['title']}**\n"
                 f"   {r.get('journal', '?')} ({r.get('year', '?')})\n"

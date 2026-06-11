@@ -1,11 +1,11 @@
 """
-报告生成工具 —— 将 Agent 研究结果输出为结构化 Markdown 报告
+Report Generation Tool -- Outputs Agent research findings as structured Markdown reports
 
-支持两种模式：
-1. generate_report: 生成完整研究报告（含标题、时间戳、内容、引用）
-2. export_finding:  追加一条结构化研究发现到当前工作区
+Supports two modes:
+1. generate_report: Generate complete research report (with title, timestamp, content, references)
+2. export_finding:  Append a single structured research finding to the current workspace
 
-所有报告保存到 05_AI_Agent/reports/ 目录。
+All reports are saved to 05_AI_Agent/reports/ directory.
 """
 
 from __future__ import annotations
@@ -17,57 +17,58 @@ from core.action import Action
 
 
 class ReportTool(Action):
-    """研究报告生成 —— 将 Agent 推理结果持久化为 Markdown 报告。"""
+    """Research report generation -- persists Agent reasoning results as Markdown reports."""
 
     name = "generate_report"
     description = (
-        "将当前研究任务的发现、计算过程、文献引用等内容生成为结构化 Markdown 报告，"
-        "保存到 reports/ 目录。适用于：研究结论归档、实验记录、文献综述汇总。"
-        "报告自动附带时间戳，引用文献请注明 DOI。"
+        "Generates a structured Markdown report from current research task findings, computation process, "
+        "and literature references, saving to reports/ directory. Suitable for: research conclusion archival, "
+        "experimental records, literature review synthesis. "
+        "Reports are automatically timestamped; literature references should include DOI."
     )
     parameters = {
         "type": "object",
         "properties": {
             "title": {
                 "type": "string",
-                "description": "报告标题，简洁明确。例如: 'SiO₂催化复合系数文献综述'",
+                "description": "Report title, concise and clear. Example: 'SiO2 Catalytic Recombination Coefficient Literature Review'",
             },
             "content": {
                 "type": "string",
                 "description": (
-                    "报告正文，支持 Markdown 格式。应包含：研究背景、方法/工具、"
-                    "主要发现、数值计算结果（如有）、引用文献（附DOI）、"
-                    "不确定性说明、结论与建议。"
+                    "Report body, supports Markdown format. Should include: research background, methods/tools, "
+                    "main findings, numerical results (if any), references (with DOI), "
+                    "uncertainty notes, conclusions and recommendations."
                 ),
             },
             "findings": {
                 "type": "array",
-                "description": "可选的结构化研究发现列表，每条包含 claim/evidence/confidence/source",
+                "description": "Optional list of structured research findings, each containing claim/evidence/confidence/source",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "claim": {"type": "string", "description": "研究发现或结论，一句话概括"},
-                        "evidence": {"type": "string", "description": "支撑该结论的证据或推理过程"},
+                        "claim": {"type": "string", "description": "Research finding or conclusion, summarized in one sentence"},
+                        "evidence": {"type": "string", "description": "Evidence or reasoning supporting this conclusion"},
                         "confidence": {
                             "type": "string",
-                            "enum": ["高", "中", "低"],
-                            "description": "置信度：高=文献直接支撑或计算验证，中=间接推理，低=待验证推测",
+                            "enum": ["High", "Medium", "Low"],
+                            "description": "Confidence level: High=directly supported by literature or verified by computation, Medium=indirect inference, Low=unverified speculation",
                         },
-                        "source": {"type": "string", "description": "证据来源（DOI、文献标题或工具名称）"},
+                        "source": {"type": "string", "description": "Evidence source (DOI, literature title, or tool name)"},
                     },
                     "required": ["claim", "confidence"],
                 },
             },
             "references": {
                 "type": "array",
-                "description": "报告中引用的文献列表",
+                "description": "List of references cited in the report",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "title": {"type": "string", "description": "文献标题"},
-                        "doi": {"type": "string", "description": "DOI（不含 https://doi.org/ 前缀）"},
-                        "year": {"type": "string", "description": "发表年份"},
-                        "relevance": {"type": "string", "description": "与本研究的相关性说明"},
+                        "title": {"type": "string", "description": "Literature title"},
+                        "doi": {"type": "string", "description": "DOI (without https://doi.org/ prefix)"},
+                        "year": {"type": "string", "description": "Publication year"},
+                        "relevance": {"type": "string", "description": "Relevance to this research"},
                     },
                     "required": ["title"],
                 },
@@ -90,7 +91,7 @@ class ReportTool(Action):
         findings: list[dict] | None = None,
         references: list[dict] | None = None,
     ) -> str:
-        """生成 Markdown 报告并保存。"""
+        """Generate Markdown report and save."""
         timestamp = datetime.now()
         safe_title = self._sanitize_filename(title)
         filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{safe_title}.md"
@@ -107,14 +108,14 @@ class ReportTool(Action):
         filepath.write_text(report, encoding="utf-8")
 
         return (
-            f"✅ 报告已生成：{filename}\n"
-            f"📁 保存路径：{filepath}\n"
-            f"📏 报告长度：{len(report)} 字符\n"
-            f"📎 结构化发现：{len(findings or [])} 条\n"
-            f"📚 引用文献：{len(references or [])} 篇"
+            f"Report generated: {filename}\n"
+            f"Save path: {filepath}\n"
+            f"Report length: {len(report)} characters\n"
+            f"Structured findings: {len(findings or [])} entries\n"
+            f"References: {len(references or [])} citations"
         )
 
-    # ── 内部方法 ────────────────────────────────────
+    # ── Internal Methods ────────────────────────────────────
 
     def _build_report(
         self,
@@ -127,12 +128,12 @@ class ReportTool(Action):
         lines = [
             f"# {title}",
             "",
-            f"**生成时间**：{timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
-            f"**生成工具**：AeroThermalExpert Agent (ReportTool)",
+            f"**Generated at**: {timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"**Generated by**: AeroThermalExpert Agent (ReportTool)",
             "",
             "---",
             "",
-            "## 📋 研究内容",
+            "## Research Content",
             "",
             content,
         ]
@@ -142,14 +143,14 @@ class ReportTool(Action):
                 "",
                 "---",
                 "",
-                "## 🔍 结构化发现",
+                "## Structured Findings",
                 "",
-                "| # | 结论 | 置信度 | 证据来源 |",
+                "| # | Conclusion | Confidence | Evidence Source |",
                 "|---|------|--------|----------|",
             ])
             for i, f in enumerate(findings, 1):
-                claim = f.get("claim", "—")
-                confidence = f.get("confidence", "—")
+                claim = f.get("claim", "--")
+                confidence = f.get("confidence", "--")
                 evidence = f.get("evidence", "")
                 source = f.get("source", "")
                 ev_src = f"{evidence} ({source})" if source else evidence
@@ -160,72 +161,72 @@ class ReportTool(Action):
             lines.extend([
                 "---",
                 "",
-                "## 📚 参考文献",
+                "## References",
                 "",
             ])
             for i, ref in enumerate(references, 1):
-                title = ref.get("title", "未知标题")
+                title = ref.get("title", "Unknown title")
                 doi = ref.get("doi", "")
                 year = ref.get("year", "?")
                 relevance = ref.get("relevance", "")
                 doi_str = f" [{doi}](https://doi.org/{doi})" if doi else ""
                 lines.append(f"{i}. **{title}**{doi_str} ({year})")
                 if relevance:
-                    lines.append(f"   - 相关性：{relevance}")
+                    lines.append(f"   - Relevance: {relevance}")
                 lines.append("")
 
         lines.extend([
             "---",
             "",
-            f"*本报告由气固热导 AI Agent 自动生成，内容需经人工审核确认。*",
+            f"*This report was automatically generated by the Gas-Solid Thermal Coupling AI Agent. Content requires human review and verification.*",
         ])
 
         return "\n".join(lines)
 
     @staticmethod
     def _sanitize_filename(title: str) -> str:
-        """清理文件名中的非法字符。"""
-        safe = title.replace("/", "_").replace("\\", "_").replace(":", "：")
+        """Sanitize illegal characters from filename."""
+        safe = title.replace("/", "_").replace("\\", "_").replace(":", ":")
         safe = safe.replace("*", "").replace("?", "").replace('"', "")
         safe = safe.replace("<", "").replace(">", "").replace("|", "")
-        # 限制长度
+        # Limit length
         if len(safe) > 60:
             safe = safe[:60]
         return safe.strip()
 
 
 class ExportFindingTool(Action):
-    """单条发现导出 —— 轻量级，适合在 ReAct 循环中逐条记录。"""
+    """Single finding export -- lightweight, suitable for recording findings one by one in ReAct loop."""
 
     name = "export_finding"
     description = (
-        "将单条研究结论追加保存到 findings/ 目录的 Markdown 日志中。"
-        "适合在推理过程中逐步记录发现，而非等全部完成后再生成报告。"
+        "Appends a single research conclusion to a Markdown log in the findings/ directory. "
+        "Suitable for gradually recording findings during reasoning, instead of generating a full report after completion."
     )
     parameters = {
         "type": "object",
         "properties": {
             "claim": {
                 "type": "string",
-                "description": "研究发现或结论，一句话概括",
+                "description": "Research finding or conclusion, summarized in one sentence",
             },
             "evidence": {
                 "type": "string",
-                "description": "支撑证据（文献引用、计算结果、逻辑推理）",
+                "description": "Supporting evidence (literature citation, computation result, logical reasoning)",
             },
             "confidence": {
                 "type": "string",
-                "enum": ["高", "中", "低"],
-                "description": "置信度：高/中/低",
+                "enum": ["High", "Medium", "Low"],
+                "description": "Confidence level: High/Medium/Low",
             },
             "source": {
                 "type": "string",
-                "description": "证据来源（DOI、文献标题或工具名称）",
+                "description": "Evidence source (DOI, literature title, or tool name)",
             },
             "tags": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "分类标签，如 ['catalytic', 'SiO2', 'experiment']",
+                "description": "Classification tags, e.g. ['catalytic', 'SiO2', 'experiment']",
             },
         },
         "required": ["claim", "confidence"],
@@ -242,38 +243,38 @@ class ExportFindingTool(Action):
     async def run(
         self,
         claim: str,
-        confidence: str = "中",
+        confidence: str = "Medium",
         evidence: str = "",
         source: str = "",
         tags: list[str] | None = None,
     ) -> str:
-        """追加一条发现到 findings 日志。"""
+        """Append a finding to the findings log."""
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         tags_str = " ".join(f"`{t}`" for t in (tags or []))
 
         entry = (
             f"### {claim}\n"
-            f"- **时间**：{timestamp}\n"
-            f"- **置信度**：{confidence}\n"
+            f"- **Timestamp**: {timestamp}\n"
+            f"- **Confidence**: {confidence}\n"
         )
         if evidence:
-            entry += f"- **证据**：{evidence}\n"
+            entry += f"- **Evidence**: {evidence}\n"
         if source:
-            entry += f"- **来源**：{source}\n"
+            entry += f"- **Source**: {source}\n"
         if tags_str:
-            entry += f"- **标签**：{tags_str}\n"
+            entry += f"- **Tags**: {tags_str}\n"
         entry += "\n"
 
-        # 追加写入
+        # Append write
         with open(self._log_file, "a", encoding="utf-8") as f:
-            # 如果文件不存在或为空，写入标题
+            # If file doesn't exist or is empty, write header
             if not self._log_file.exists() or self._log_file.stat().st_size == 0:
-                f.write("# 研究发现日志\n\n> 由 AeroThermalExpert Agent 自动记录\n\n")
+                f.write("# Research Findings Log\n\n> Automatically recorded by AeroThermalExpert Agent\n\n")
             f.write(entry)
 
         return (
-            f"✅ 发现已记录\n"
-            f"📝 结论：{claim}\n"
-            f"🎯 置信度：{confidence}\n"
-            f"📁 日志文件：{self._log_file}"
+            f"Finding recorded\n"
+            f"Conclusion: {claim}\n"
+            f"Confidence: {confidence}\n"
+            f"Log file: {self._log_file}"
         )

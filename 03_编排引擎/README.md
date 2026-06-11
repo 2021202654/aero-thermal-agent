@@ -37,3 +37,45 @@ User Input -> Make Plan -> Step1(miniReAct) -> Step2 -> ... -> Synthesize
 - 计划阶段：LLM 将任务分解为 <= `max_plan_steps` 步
 - 执行阶段：每步是独立的 mini ReAct 循环
 - 合成阶段：汇总所有步骤，生成结构化最终回答
+
+---
+
+# 03 Orchestration Engine
+
+## Status: ✅ Implemented
+
+### Implemented Patterns
+
+| Pattern | File | Description |
+|---------|------|-------------|
+| **ReAct** | `../core/orchestrator.py -> ReActOrchestrator` | Think-Act-Observe loop, suitable for open-ended exploration |
+| **Plan-Execute** | `../core/orchestrator.py -> PlanExecuteOrchestrator` | Plan first then execute, suitable for structured multi-step tasks |
+
+### Safety Features
+
+| Feature | Description |
+|---------|-------------|
+| **JSON Parse Exception Protection** | Tool parameter format errors don't crash; returns user-friendly error messages |
+| **LRU Bounded Cache** | `_BoundedCache` (max=100), deduplicates identical tool+parameter calls to prevent infinite loops and memory exhaustion |
+| **max_steps Limit** | Maximum `max_react_steps` steps (default 8) to prevent infinite loops |
+
+### ReAct Loop
+
+```
+User Input -> LLM(think) -> tool_call? --Yes--> execute tool -> observe -> LLM(think)
+                               |
+                               No -> Final Answer
+```
+
+- Maximum `max_react_steps` steps (default 8) to prevent infinite loops
+- Each step's tool result is automatically appended to the conversation context
+
+### Plan-Execute Loop
+
+```
+User Input -> Make Plan -> Step1(miniReAct) -> Step2 -> ... -> Synthesize
+```
+
+- Planning phase: LLM decomposes the task into <= `max_plan_steps` steps
+- Execution phase: Each step is an independent mini ReAct loop
+- Synthesis phase: Aggregates all steps, generates a structured final response

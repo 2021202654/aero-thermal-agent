@@ -1,14 +1,14 @@
 """
-外部文献搜索工具 —— 通过 OpenAlex API 搜索全球学术文献
+External Literature Search Tool — Search global academic literature via OpenAlex API
 
-OpenAlex 是一个开放的学术文献索引，覆盖 2.5 亿+ 论文。
-- 免费、无鉴权、REST API
-- 速率限制 100k 请求/天
-- 支持关键词、DOI、主题、年份等多维度检索
+OpenAlex is an open academic literature index covering 250M+ papers.
+- Free, no authentication required, REST API
+- Rate limit: 100k requests/day
+- Supports multi-dimensional search: keywords, DOI, topics, year, etc.
 
-与 LiteratureSearchTool 的区别：
-- LiteratureSearchTool：本地 3,326 篇文献库（CSV + FAISS）
-- WebSearchTool：全球开放学术文献（OpenAlex API）
+Difference from LiteratureSearchTool:
+- LiteratureSearchTool: Local 3,326-paper corpus (CSV + FAISS)
+- WebSearchTool: Global open academic literature (OpenAlex API)
 """
 
 from __future__ import annotations
@@ -21,13 +21,14 @@ from core.action import Action
 
 
 class WebSearchTool(Action):
-    """外部文献搜索 —— 通过 OpenAlex API 检索全球学术文献。"""
+    """External Literature Search — Search global academic literature via OpenAlex API."""
 
     name = "web_search"
     description = (
-        "在 OpenAlex 全球学术文献索引中检索（覆盖 2.5 亿+ 论文）。"
-        "适用于：查找最新研究进展、补充本地文献库未覆盖的论文、按 DOI 精确查找、验证引用。"
-        "支持关键词搜索、年份/主题过滤、按引用量排序。"
+        "Search the OpenAlex global academic literature index (covering 250M+ papers). "
+        "Use cases: finding latest research progress, supplementing locally uncovered papers, "
+        "precise DOI lookup, citation verification. "
+        "Supports keyword search, year/topic filtering, sorting by citation count."
     )
     parameters = {
         "type": "object",
@@ -35,33 +36,33 @@ class WebSearchTool(Action):
             "query": {
                 "type": "string",
                 "description": (
-                    "检索关键词（英文），支持布尔运算符 AND/OR。"
-                    "例如: 'catalytic recombination coefficient SiO2' 或 'shock wave boundary layer interaction hypersonic'"
+                    "Search keyword (in English), supports Boolean operators AND/OR. "
+                    "For example: 'catalytic recombination coefficient SiO2' or 'shock wave boundary layer interaction hypersonic'"
                 ),
             },
             "search_type": {
                 "type": "string",
                 "enum": ["keyword", "doi", "title"],
-                "description": "检索类型：keyword=关键词搜索, doi=按DOI精确查找（仅接受DOI格式如10.xxxx/xxxxx，NASA报告编号/普通文本请用keyword）, title=按标题搜索",
+                "description": "Search type: keyword=keyword search, doi=precise DOI lookup (only accepts DOI format like 10.xxxx/xxxxx, for report numbers/plain text use keyword), title=title search",
                 "default": "keyword",
             },
             "per_page": {
                 "type": "integer",
-                "description": "返回结果数量，默认 5，最大 25",
+                "description": "Number of results to return, default 5, maximum 25",
                 "default": 5,
             },
             "year_from": {
                 "type": "integer",
-                "description": "起始发表年份（含），如 2020",
+                "description": "Start publication year (inclusive), e.g., 2020",
             },
             "year_to": {
                 "type": "integer",
-                "description": "截止发表年份（含），如 2025",
+                "description": "End publication year (inclusive), e.g., 2025",
             },
             "sort": {
                 "type": "string",
                 "enum": ["relevance_score:desc", "cited_by_count:desc", "publication_date:desc"],
-                "description": "排序方式：relevance_score:desc=相关性, cited_by_count:desc=引用量, publication_date:desc=最新",
+                "description": "Sort method: relevance_score:desc=relevance, cited_by_count:desc=citations, publication_date:desc=newest",
                 "default": "relevance_score:desc",
             },
         },
@@ -71,7 +72,7 @@ class WebSearchTool(Action):
     BASE_URL = "https://api.openalex.org"
 
     def __init__(self, email: str = ""):
-        self._email = email  # OpenAlex 礼貌参数，可填邮箱
+        self._email = email  # OpenAlex courtesy parameter, can provide email address
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -93,9 +94,9 @@ class WebSearchTool(Action):
         try:
             client = await self._get_client()
         except Exception as e:
-            return f"[网络错误] 无法创建 HTTP 客户端：{e}"
+            return f"[Network Error] Failed to create HTTP client: {e}"
 
-        # ── 构建请求 ────────────────────────────────
+        # ── Build Request ────────────────────────────────
         if search_type == "doi":
             results = await self._lookup_by_doi(client, query)
             return self._format_results(query, results, search_type)
@@ -107,7 +108,7 @@ class WebSearchTool(Action):
             )
             return self._format_results(query, results, search_type)
 
-    # ── 检索实现 ────────────────────────────────────
+    # ── Search Implementation ────────────────────────────────────
 
     async def _search_keyword(
         self,
@@ -118,17 +119,17 @@ class WebSearchTool(Action):
         year_to: int | None = None,
         sort: str = "relevance",
     ) -> list[dict[str, Any]]:
-        """OpenAlex 关键词搜索。"""
+        """OpenAlex keyword search."""
         url = f"{self.BASE_URL}/works"
 
-        # 构建 filter
+        # Build filter
         filters = []
         if year_from:
             filters.append(f"publication_year:{year_from}")
         if year_to:
             if year_from:
                 filters.insert(-1 if filters else 0, f"publication_year:{year_from}-{year_to}")
-                # 重新构建
+                # Rebuild
                 filters = [f for f in filters if not f.startswith(f"publication_year:{year_from}") or "-" in f]
                 filters = [f for f in filters if not (f.startswith(f"publication_year:{year_from}") and not "-" in f)]
         if year_from and year_to:
@@ -138,7 +139,7 @@ class WebSearchTool(Action):
             filters.append(f"publication_year:{year_from}")
         # else: no year filter
 
-        # 简化的过滤逻辑
+        # Simplified filter logic
         filter_str = ""
         if year_from and year_to:
             filter_str = f"publication_year:{year_from}-{year_to}"
@@ -164,24 +165,24 @@ class WebSearchTool(Action):
             resp.raise_for_status()
             data = resp.json()
         except httpx.HTTPError as e:
-            return [{"error": f"OpenAlex API 请求失败：{e}"}]
+            return [{"error": f"OpenAlex API request failed: {e}"}]
         except Exception as e:
-            return [{"error": f"解析响应失败：{e}"}]
+            return [{"error": f"Failed to parse response: {e}"}]
 
         return self._parse_works(data.get("results", []))
 
     async def _lookup_by_doi(
         self, client: httpx.AsyncClient, doi: str
     ) -> list[dict[str, Any]]:
-        """按 DOI 精确查找。"""
-        # 清理 DOI 前缀
+        """Precise DOI lookup."""
+        # Clean DOI prefix
         clean_doi = doi.strip()
         if clean_doi.startswith("https://doi.org/"):
             clean_doi = clean_doi[16:]
         elif clean_doi.startswith("http://doi.org/"):
             clean_doi = clean_doi[15:]
         url = f"{self.BASE_URL}/works/doi:{httpx.URL('https://doi.org/' + clean_doi).path.split('/')[-1] if '/' not in clean_doi else clean_doi}"
-        # 简化：直接编码 DOI
+        # Simplify: encode DOI directly
         import urllib.parse
         encoded_doi = urllib.parse.quote(clean_doi, safe="")
         url = f"{self.BASE_URL}/works/doi:{encoded_doi}"
@@ -193,14 +194,14 @@ class WebSearchTool(Action):
                 return [{"error": f"DOI not found: '{doi}'. If this is a report number or keyword (not a DOI), retry with search_type='keyword'."}]
             resp.raise_for_status()
             data = resp.json()
-            return self._parse_works([data]) if data.get("id") else [{"error": "无结果"}]
+            return self._parse_works([data]) if data.get("id") else [{"error": "No results"}]
         except httpx.HTTPError as e:
-            return [{"error": f"请求失败：{e}"}]
+            return [{"error": f"Request failed: {e}"}]
 
     async def _search_by_title(
         self, client: httpx.AsyncClient, title: str, per_page: int
     ) -> str:
-        """按标题搜索（使用 filter 精确匹配）。"""
+        """Search by title (using filter for exact match)."""
         url = f"{self.BASE_URL}/works"
         params: dict[str, Any] = {
             "filter": f"title.search:{title}",
@@ -215,36 +216,36 @@ class WebSearchTool(Action):
             results = self._parse_works(data.get("results", []))
             return self._format_results(title, results, "title")
         except Exception as e:
-            return f"[搜索错误] {e}"
+            return f"[Search Error] {e}"
 
-    # ── 解析 ────────────────────────────────────────
+    # ── Parsing ────────────────────────────────────────
 
     def _parse_works(self, works: list[dict]) -> list[dict[str, Any]]:
-        """将 OpenAlex work 对象解析为统一格式。"""
+        """Parse OpenAlex work objects into unified format."""
         parsed = []
         for w in works:
             if "error" in w:
                 parsed.append(w)
                 continue
 
-            # 提取作者（前 5 位）
+            # Extract authors (first 5)
             authorships = w.get("authorships", [])
             authors = [
-                a.get("author", {}).get("display_name", "未知")
+                a.get("author", {}).get("display_name", "Unknown")
                 for a in authorships[:5]
             ]
 
-            # 提取期刊/会议名
+            # Extract journal/conference name
             primary_loc = w.get("primary_location", {}) or {}
             source = primary_loc.get("source", {}) or {}
             journal = source.get("display_name", "")
 
-            # 摘要（OpenAlex 提供 inverted abstract → 重组为纯文本）
+            # Abstract (OpenAlex provides inverted abstract → reconstruct to plain text)
             abstract = ""
             abstract_inverted = w.get("abstract_inverted_index", None)
             if abstract_inverted:
                 abstract = self._reconstruct_abstract(abstract_inverted)
-            # 截取前 500 字符
+            # Truncate to first 500 characters
             if len(abstract) > 500:
                 abstract = abstract[:500] + "..."
 
@@ -252,10 +253,10 @@ class WebSearchTool(Action):
             doi_clean = doi.replace("https://doi.org/", "") if doi else ""
 
             parsed.append({
-                "title": w.get("title", "无标题"),
+                "title": w.get("title", "Untitled"),
                 "authors": authors,
                 "year": str(w.get("publication_year", "?")),
-                "journal": journal or "未知期刊",
+                "journal": journal or "Unknown journal",
                 "doi": doi_clean,
                 "cited_by": w.get("cited_by_count", 0),
                 "type": w.get("type", "unknown"),
@@ -267,23 +268,23 @@ class WebSearchTool(Action):
 
     @staticmethod
     def _reconstruct_abstract(inverted: dict) -> str:
-        """将 OpenAlex 的倒排索引摘要重建为纯文本。"""
+        """Reconstruct OpenAlex inverted-index abstract to plain text."""
         if not inverted:
             return ""
-        # 构建 {position: word} 映射
+        # Build {position: word} mapping
         positions: dict[int, str] = {}
         for word, pos_list in inverted.items():
             for pos in pos_list:
                 positions[pos] = word
-        # 按位置排序拼接
+        # Sort by position and join
         return " ".join(positions[i] for i in sorted(positions))
 
-    # ── 格式化 ──────────────────────────────────────
+    # ── Formatting ──────────────────────────────────────
 
     def _format_results(
         self, query: str, results: list[dict[str, Any]], search_type: str
     ) -> str:
-        """格式化检索结果为 Markdown。"""
+        """Format search results as Markdown."""
         if not results:
             return f"[web_search] No results for '{query}'."
 
@@ -307,15 +308,15 @@ class WebSearchTool(Action):
             doi_link = f"https://doi.org/{doi}" if doi else ""
 
             lines.append(f"### {i}. {r['title']}")
-            lines.append(f"- **作者**：{authors}")
-            lines.append(f"- **期刊**：{r.get('journal', '?')} ({r.get('year', '?')})")
+            lines.append(f"- **Authors**: {authors}")
+            lines.append(f"- **Journal**: {r.get('journal', '?')} ({r.get('year', '?')})")
             if doi_link:
-                lines.append(f"- **DOI**：[{doi}]({doi_link})")
-            lines.append(f"- **引用数**：{r.get('cited_by', 0)}")
+                lines.append(f"- **DOI**: [{doi}]({doi_link})")
+            lines.append(f"- **Citations**: {r.get('cited_by', 0)}")
             if r.get("is_open_access"):
-                lines.append(f"- **OA**：✅ 开放获取")
+                lines.append(f"- **OA**: ✅ Open Access")
             if r.get("abstract"):
-                lines.append(f"- **摘要**：{r['abstract']}")
+                lines.append(f"- **Abstract**: {r['abstract']}")
             lines.append("")
 
         return "\n".join(lines)

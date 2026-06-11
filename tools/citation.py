@@ -1,15 +1,15 @@
 """
-引文解析工具 —— DOI 元数据查询 + BibTeX 生成
+Citation Resolution Tool — DOI metadata lookup + BibTeX generation
 
-支持两种解析路径：
-1. CrossRef API（主要）：DOI → 完整元数据 + BibTeX
-2. OpenAlex API（回退）：CrossRef 不可用时回退
+Supports two resolution pathways:
+1. CrossRef API (primary): DOI → complete metadata + BibTeX
+2. OpenAlex API (fallback): when CrossRef is unavailable
 
-应用场景：
-- 验证 Agent 检索到的 DOI 是否真实存在
-- 获取论文的完整引用信息（作者/卷期页码）
-- 生成标准 BibTeX 引用条目
-- 按标题+作者模糊匹配（查漏补缺）
+Application scenarios:
+- Verify if DOIs retrieved by Agent actually exist
+- Get complete citation information (authors/volume-issue-pages)
+- Generate standard BibTeX citation entries
+- Fuzzy match by title + author (find missing entries)
 """
 
 from __future__ import annotations
@@ -23,13 +23,13 @@ from core.action import Action
 
 
 class CitationResolverTool(Action):
-    """引文解析 —— DOI 验证、元数据查询、BibTeX 生成。"""
+    """Citation Resolution — DOI verification, metadata lookup, BibTeX generation."""
 
     name = "resolve_citation"
     description = (
-        "通过 DOI 查询论文完整元数据，或按标题+作者模糊匹配。"
-        "返回：标题、全部作者、年份、期刊、卷期页码、摘要、引用数、BibTeX 条目。"
-        "用于验证检索到的文献、生成规范引用、补充缺失的元数据。"
+        "Query complete paper metadata by DOI, or fuzzy match by title + author. "
+        "Returns: title, all authors, year, journal, volume-issue-pages, abstract, citation count, BibTeX entry. "
+        "Used for verifying retrieved literature, generating standard citations, and supplementing missing metadata."
     )
     parameters = {
         "type": "object",
@@ -37,14 +37,14 @@ class CitationResolverTool(Action):
             "doi": {
                 "type": "string",
                 "description": (
-                    "论文 DOI（不含 https://doi.org/ 前缀）。"
-                    "例如: '10.1017/jfm.2021.123' 或 '10.2514/1.T7003'"
+                    "Paper DOI (without https://doi.org/ prefix). "
+                    "For example: '10.1017/jfm.2021.123' or '10.2514/1.T7003'"
                 ),
             },
             "output_format": {
                 "type": "string",
                 "enum": ["full", "bibtex", "compact"],
-                "description": "输出格式：full=完整元数据, bibtex=仅BibTeX, compact=标题+作者+期刊+年份",
+                "description": "Output format: full=complete metadata, bibtex=BibTeX only, compact=title+author+journal+year",
                 "default": "full",
             },
         },
@@ -67,10 +67,10 @@ class CitationResolverTool(Action):
         doi: str,
         output_format: str = "full",
     ) -> str:
-        # 清理 DOI
+        # Clean DOI
         doi = self._clean_doi(doi)
         if not doi:
-            return "❌ 无效的 DOI 格式。"
+            return "❌ Invalid DOI format."
 
         client = await self._get_client()
         metadata = await self._resolve_crossref(client, doi)
@@ -82,9 +82,9 @@ class CitationResolverTool(Action):
 
         if metadata is None:
             return (
-                f"❌ 未找到 DOI `{doi}` 对应的论文。\n"
-                f"已尝试 CrossRef 和 OpenAlex 两个数据源。\n"
-                f"建议：检查 DOI 拼写，或尝试在 Google Scholar 中手动搜索。"
+                f"❌ No paper found for DOI `{doi}`.\n"
+                f"Both CrossRef and OpenAlex data sources have been attempted.\n"
+                f"Suggestion: Check DOI spelling, or try manual search on Google Scholar."
             )
 
         metadata["doi"] = doi
@@ -97,12 +97,12 @@ class CitationResolverTool(Action):
         else:
             return self._format_full(metadata)
 
-    # ── 解析实现 ────────────────────────────────────
+    # ── Resolution Implementation ────────────────────────────────────
 
     async def _resolve_crossref(
         self, client: httpx.AsyncClient, doi: str
     ) -> dict[str, Any] | None:
-        """CrossRef API 查询。"""
+        """CrossRef API query."""
         url = f"{self.CROSSREF_BASE}/works/{doi}"
         headers = {"User-Agent": "AeroThermalExpert-Agent/1.0 (mailto:research@example.com)"}
 
@@ -116,27 +116,27 @@ class CitationResolverTool(Action):
             if not msg:
                 return None
 
-            # 提取作者
+            # Extract authors
             authors = []
             for a in msg.get("author", []):
                 given = a.get("given", "")
                 family = a.get("family", "")
                 authors.append(f"{family}, {given}".strip(", "))
 
-            # 期刊/会议
+            # Journal/conference
             journal = ""
             container = msg.get("container-title", [])
             if container:
                 journal = container[0] if isinstance(container, list) else container
 
-            # 日期
+            # Date
             date_parts = msg.get("published-print", {}).get("date-parts", [[]])
             if not date_parts[0]:
                 date_parts = msg.get("created", {}).get("date-parts", [[]])
             year = str(date_parts[0][0]) if date_parts[0] else "?"
 
             return {
-                "title": msg.get("title", ["无标题"])[0] if msg.get("title") else "无标题",
+                "title": msg.get("title", ["Untitled"])[0] if msg.get("title") else "Untitled",
                 "authors": authors,
                 "year": year,
                 "journal": journal,
@@ -155,7 +155,7 @@ class CitationResolverTool(Action):
     async def _resolve_openalex(
         self, client: httpx.AsyncClient, doi: str
     ) -> dict[str, Any] | None:
-        """OpenAlex 回退查询。"""
+        """OpenAlex fallback query."""
         import urllib.parse
         encoded_doi = urllib.parse.quote(doi, safe="")
         url = f"{self.OPENALEX_BASE}/works/doi:{encoded_doi}"
@@ -170,9 +170,9 @@ class CitationResolverTool(Action):
 
             authors = []
             for a in data.get("authorships", [])[:20]:
-                authors.append(a.get("author", {}).get("display_name", "未知"))
+                authors.append(a.get("author", {}).get("display_name", "Unknown"))
 
-            # 摘要重建
+            # Abstract reconstruction
             abstract = ""
             inv = data.get("abstract_inverted_index", None)
             if inv:
@@ -182,12 +182,12 @@ class CitationResolverTool(Action):
                 abstract = abstract[:800] + "..."
 
             return {
-                "title": data.get("title", "无标题"),
+                "title": data.get("title", "Untitled"),
                 "authors": authors,
                 "year": str(data.get("publication_year", "?")),
                 "journal": (
                     data.get("primary_location", {}).get("source", {}).get("display_name", "")
-                    or "未知期刊"
+                    or "Unknown journal"
                 ),
                 "volume": "",
                 "issue": "",
@@ -201,13 +201,13 @@ class CitationResolverTool(Action):
         except Exception:
             return None
 
-    # ── 格式化 ──────────────────────────────────────
+    # ── Formatting ──────────────────────────────────────
 
     def _format_full(self, m: dict[str, Any]) -> str:
         authors = m.get("authors", [])
         author_str = ", ".join(authors[:5])
         if len(authors) > 5:
-            author_str += f" et al. (共 {len(authors)} 位)"
+            author_str += f" et al. ({len(authors)} total)"
 
         doi = m.get("doi", "")
         doi_link = f"https://doi.org/{doi}" if doi else ""
@@ -215,16 +215,16 @@ class CitationResolverTool(Action):
         lines = [
             f"## 📄 {m['title']}",
             f"",
-            f"**数据源**：{m.get('source', '?')}",
-            f"**作者**：{author_str}",
-            f"**年份**：{m.get('year', '?')}",
+            f"**Data Source**: {m.get('source', '?')}",
+            f"**Authors**: {author_str}",
+            f"**Year**: {m.get('year', '?')}",
         ]
 
         if m.get("journal"):
             vol_issue = m.get("volume", "")
             if m.get("issue"):
                 vol_issue += f"({m['issue']})"
-            journal_line = f"**期刊**：{m['journal']}"
+            journal_line = f"**Journal**: {m['journal']}"
             if vol_issue:
                 journal_line += f", {vol_issue}"
             if m.get("pages"):
@@ -232,13 +232,13 @@ class CitationResolverTool(Action):
             lines.append(journal_line)
 
         if doi_link:
-            lines.append(f"**DOI**：[{doi}]({doi_link})")
+            lines.append(f"**DOI**: [{doi}]({doi_link})")
 
-        lines.append(f"**类型**：{m.get('type', '?')}")
-        lines.append(f"**被引次数**：{m.get('cited_by', 0)}")
+        lines.append(f"**Type**: {m.get('type', '?')}")
+        lines.append(f"**Citations**: {m.get('cited_by', 0)}")
 
         if m.get("abstract"):
-            lines.append(f"\n**摘要**：{m['abstract']}")
+            lines.append(f"\n**Abstract**: {m['abstract']}")
 
         # BibTeX
         lines.append(f"\n### BibTeX\n```bibtex\n{self._build_bibtex(m)}\n```")
@@ -264,8 +264,8 @@ class CitationResolverTool(Action):
         return f"```bibtex\n{self._build_bibtex(m)}\n```"
 
     def _build_bibtex(self, m: dict[str, Any]) -> str:
-        """生成 BibTeX 条目。"""
-        # 生成 citation key
+        """Generate BibTeX entry."""
+        # Generate citation key
         authors = m.get("authors", [])
         first_author = "Unknown"
         last_name = "Unknown"
@@ -277,7 +277,7 @@ class CitationResolverTool(Action):
         title_key = "".join(w.capitalize()[:3] for w in title_words if w.isalpha())
         cite_key = f"{last_name}{year}{title_key}"
 
-        # 类型
+        # Type
         entry_type = "article"
         if m.get("type") in ("book", "book-chapter"):
             entry_type = "inbook"
@@ -309,18 +309,18 @@ class CitationResolverTool(Action):
         lines.append("}")
         return "\n".join(lines)
 
-    # ── 工具方法 ────────────────────────────────────
+    # ── Utility Methods ──────────────────────────────────────
 
     @staticmethod
     def _clean_doi(doi: str) -> str:
-        """清理 DOI 字符串。"""
+        """Clean DOI string."""
         doi = doi.strip()
-        # 去掉 URL 前缀
+        # Remove URL prefix
         for prefix in ("https://doi.org/", "http://doi.org/", "https://dx.doi.org/"):
             if doi.startswith(prefix):
                 doi = doi[len(prefix):]
                 break
-        # 基础校验：应该含 /
+        # Basic validation: should contain /
         if "/" not in doi:
             return ""
         return doi

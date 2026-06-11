@@ -1,17 +1,17 @@
 """
-内置工具集 —— Agent 开箱即用的领域工具
+Built-in Tool Set — Domain Tools Ready to Use for Agent
 
-- LiteratureSearchTool    : FAISS 语义检索 + CSV 关键词检索（本地 3,326 篇文献库）
-- WebSearchTool            : OpenAlex API 外部文献搜索（全球 2.5 亿+ 论文）
-- AeroThermalComputeTool   : 气动热参数计算（驻点热流 / Knudsen / 催化 / 边界层）
-- CodeExecutionTool        : Python 子进程沙箱执行（计算+作图+验证）
-- CitationResolverTool     : CrossRef/OpenAlex DOI 解析 + BibTeX 生成
-- PDFAnalysisTool          : PDF 论文解析（文本/元数据/章节/参数识别）
-- ReportTool               : 结构化 Markdown 研究报告生成
-- ExportFindingTool        : 单条研究发现记录
-- PandocExportTool         : Markdown → LaTeX/DOCX/PDF 格式导出
-- HypothesisGenerator      : AI Scientist 核心 — 文献 Gap 识别 + 假设生成 + 物理约束验证
-- PhysicsConstraintLayer   : 气固界面物理约束验证层（参数边界/流态/守恒律）
+- LiteratureSearchTool    : FAISS semantic retrieval + CSV keyword search (local 3,326 paper literature database)
+- WebSearchTool            : OpenAlex API external literature search (global 250 million+ papers)
+- AeroThermalComputeTool   : Aero-thermal parameter computation (stagnation heat flux / Knudsen / catalytic / boundary layer)
+- CodeExecutionTool        : Python subprocess sandbox execution (computation + plotting + verification)
+- CitationResolverTool     : CrossRef/OpenAlex DOI resolution + BibTeX generation
+- PDFAnalysisTool          : PDF paper parsing (text/metadata/sections/parameter identification)
+- ReportTool               : Structured Markdown research report generation
+- ExportFindingTool        : Single finding record
+- PandocExportTool         : Markdown → LaTeX/DOCX/PDF format export
+- HypothesisGenerator      : AI Scientist core — literature Gap identification + hypothesis generation + physics constraint verification
+- PhysicsConstraintLayer   : Gas-solid interface physics constraint verification layer (parameter bounds/flow regime/conservation laws)
 """
 
 from .search import LiteratureSearchTool

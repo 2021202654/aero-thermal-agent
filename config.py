@@ -1,16 +1,16 @@
 """
-Agent 统一配置
-===============
-所有可调参数集中管理，避免散落在各处。
+Agent Unified Configuration
+===========================
+All tunable parameters are centrally managed to avoid scattering across files.
 
-使用方式：
+Usage:
     from config import AgentConfig
     cfg = AgentConfig()
     agent = cfg.build_agent()
 
-环境变量：
-    优先从 05_AI_Agent/.env 加载，不存在则使用系统环境变量。
-    百炼 API 需要 DASHSCOPE_API_KEY=sk-xxxxx
+Environment Variables:
+    Priority is given to loading from 05_AI_Agent/.env; if absent, system environment variables are used.
+    Bailian API requires DASHSCOPE_API_KEY=sk-xxxxx
 """
 
 from __future__ import annotations
@@ -19,10 +19,10 @@ import os
 from pathlib import Path
 
 
-# ── .env 自动加载 ────────────────────────────────────
+# ── .env Auto-loading ─────────────────────────────────
 
 def _load_dotenv() -> None:
-    """从 05_AI_Agent/.env 加载环境变量（零依赖）。"""
+    """Load environment variables from 05_AI_Agent/.env (zero dependencies)."""
     env_file = Path(__file__).parent / ".env"
     if not env_file.exists():
         return
@@ -35,12 +35,12 @@ def _load_dotenv() -> None:
                 continue
             key, _, value = line.partition("=")
             key, value = key.strip(), value.strip()
-            # 去掉引号
+            # Strip quotes
             if value.startswith('"') and value.endswith('"'):
                 value = value[1:-1]
             elif value.startswith("'") and value.endswith("'"):
                 value = value[1:-1]
-            # 仅在未设置时覆盖（系统环境变量优先级更高）
+            # Override only if not already set (system env vars take priority)
             if key and key not in os.environ:
                 os.environ[key] = value
 
@@ -49,16 +49,16 @@ _load_dotenv()
 
 from core.llm import LLMConfig
 
-# ── 项目根目录 ──────────────────────────────────────
+# ── Project Root ─────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
-# ── 预置 LLM 配置 ───────────────────────────────────
+# ── Pre-configured LLM Settings ─────────────────────
 
 
 def _bailian_config() -> LLMConfig:
-    """阿里云百炼 API 配置。"""
+    """Alibaba Cloud Bailian API configuration."""
     return LLMConfig(
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         api_key=os.getenv("DASHSCOPE_API_KEY", "your-api-key-here"),
@@ -69,7 +69,7 @@ def _bailian_config() -> LLMConfig:
 
 
 def _vllm_local_config() -> LLMConfig:
-    """本地 vLLM 推理配置（微调模型）。"""
+    """Local vLLM inference configuration (fine-tuned model)."""
     return LLMConfig(
         base_url="http://localhost:8000/v1",
         api_key="not-needed",
@@ -80,7 +80,7 @@ def _vllm_local_config() -> LLMConfig:
 
 
 def _ollama_config() -> LLMConfig:
-    """Ollama 本地配置 —— WSL2 桌面推理。"""
+    """Ollama local configuration — WSL2 desktop inference."""
     return LLMConfig(
         base_url="http://localhost:11434/v1",
         api_key="not-needed",
@@ -91,7 +91,7 @@ def _ollama_config() -> LLMConfig:
 
 
 def _siliconflow_config() -> LLMConfig:
-    """硅基流动 API 配置 —— DeepSeek-V3 / Qwen 等开源模型，性价比极高。"""
+    """SiliconFlow API configuration — DeepSeek-V3 / Qwen and other open-source models, excellent cost-performance."""
     return LLMConfig(
         base_url="https://api.siliconflow.cn/v1",
         api_key=os.getenv("SILICONFLOW_API_KEY", "your-api-key-here"),
@@ -102,9 +102,9 @@ def _siliconflow_config() -> LLMConfig:
 
 
 def _custom_config() -> LLMConfig:
-    """从 05_AI_Agent/llm_config.json 读取自定义 LLM 配置。
+    """Load custom LLM configuration from 05_AI_Agent/llm_config.json.
 
-    配置文件格式（JSON）：
+    Configuration file format (JSON):
         {
             "base_url": "https://api.example.com/v1",
             "api_key": "sk-xxxxx",
@@ -113,21 +113,21 @@ def _custom_config() -> LLMConfig:
             "max_tokens": 2048
         }
 
-    修改此文件后无需重启，下次对话自动生效。
+    No restart required after modifying this file; changes take effect automatically on next conversation.
     """
     import json as _json
 
     config_file = Path(__file__).parent / "llm_config.json"
     if not config_file.exists():
         raise FileNotFoundError(
-            f"未找到自定义 LLM 配置文件：{config_file}\n"
-            f"请创建该文件，格式参考 llm_config.example.json"
+            f"Custom LLM config file not found: {config_file}\n"
+            f"Please create this file; for format reference see llm_config.example.json"
         )
 
     with open(config_file, "r", encoding="utf-8") as f:
         cfg = _json.load(f)
 
-    # 支持 ${ENV_VAR} 和 $ENV_VAR 引用环境变量
+    # Support ${ENV_VAR} and $ENV_VAR for environment variable references
     api_key = cfg.get("api_key", "")
     if api_key.startswith("$"):
         if api_key.startswith("${") and api_key.endswith("}"):
@@ -137,27 +137,27 @@ def _custom_config() -> LLMConfig:
 
     return LLMConfig(
         base_url=cfg.get("base_url", ""),
-        api_key=api_key,  # 使用解析后的值（含环境变量替换）
+        api_key=api_key,  # Use resolved value (includes env var substitution)
         model=cfg.get("model", ""),
         temperature=cfg.get("temperature", 0.3),
         max_tokens=cfg.get("max_tokens", 2048),
     )
 
 
-# ── 主配置 ──────────────────────────────────────────
+# ── Main Configuration ──────────────────────────────
 
 
 class AgentConfig:
-    """Agent 总配置。
+    """Agent master configuration.
 
-    用法：
-        # 使用本地微调模型
+    Usage:
+        # Use local fine-tuned model
         cfg = AgentConfig(llm="vllm_local")
 
-        # 使用百炼 API
+        # Use Bailian API
         cfg = AgentConfig(llm="bailian")
 
-        # 自定义
+        # Custom
         cfg = AgentConfig(llm=LLMConfig(base_url="...", model="..."))
     """
 
@@ -176,7 +176,7 @@ class AgentConfig:
         max_react_steps: int = 15,
         max_plan_steps: int = 6,
         verbose: bool = False,
-        # 路径配置
+        # Path configuration
         faiss_index_dir: str | Path | None = None,
         literature_csv: str | Path | None = None,
     ):
@@ -184,18 +184,18 @@ class AgentConfig:
         if isinstance(llm, str):
             factory = self.PRESETS.get(llm)
             if factory is None:
-                raise ValueError(f"未知预置: {llm}，可选: {list(self.PRESETS)}")
+                raise ValueError(f"Unknown preset: {llm}, available options: {list(self.PRESETS)}")
             self.llm = factory()
         else:
             self.llm = llm
 
-        # 运行模式
+        # Execution mode
         self.mode = mode
         self.max_react_steps = max_react_steps
         self.max_plan_steps = max_plan_steps
         self.verbose = verbose
 
-        # 路径
+        # Paths
         self.faiss_index_dir = Path(faiss_index_dir) if faiss_index_dir else (
             PROJECT_ROOT / "03_知识工程" / "05_向量索引" / "faiss_index"
         )
@@ -204,31 +204,31 @@ class AgentConfig:
         )
 
     def build_agent(self):
-        """根据配置构建 Agent 实例。"""
+        """Build an Agent instance based on the configuration."""
         from core.agent import Agent
 
         return Agent(
             llm_config=self.llm,
             name="AeroThermalScientist",
-            profile="高超声速气固界面耦合 AI Scientist，精通气动热力学、催化复合、SBLI、非平衡流动。能主动识别研究 Gap、生成可验证假设、设计实验方案",
-            goal="从被动问答升级为主动科研：文献 Gap 识别 → 假设生成 → 实验设计 → 结果分析 → 论文生成",
+            profile="Hypersonic gas-solid interface coupling AI Scientist, expert in aerodynamic thermodynamics, catalytic recombination, SBLI, non-equilibrium flow. Capable of proactively identifying research gaps, generating verifiable hypotheses, designing experimental protocols",
+            goal="Upgrade from passive Q&A to proactive scientific research: literature gap identification → hypothesis generation → experimental design → results analysis → paper generation",
             constraints=[
-                # 数据可信度
-                "工具返回的数据优先于自身训练知识——冲突时以工具为准",
-                "所有引用必须来自工具实际返回结果，绝不凭记忆填写 NASA 报告号/DOI/论文标题",
-                "数值计算结果必须标注计算方法、假设条件和参数来源",
-                "计算结果必须明确区分为'基于假设的条件计算'或'文献验证值'",
-                "不确定或超出知识范围的内容必须明确标注为'待验证'",
-                "不编造数据，不虚构引用，不做无依据的定量外推",
-                # 假设生成
-                "生成的假设必须通过物理约束验证（参数边界、流态一致性、守恒律）",
-                "假设预测必须具体可验证（数值或明确趋势）",
-                # 催化复合系数专项
-                "催化复合系数必须指定复合物种(O/N/mixed)、表面类型(石英/RCG/SiC/Pt等)、参考条件",
-                "催化系数的温度趋势必须引用可验证的文献或工具计算，不能仅凭经验直觉",
-                # 文档记录
-                "任务完成后必须调用 generate_report 工具将结论保存为 Markdown 报告",
-                "研究过程中发现关键结论时，调用 export_finding 逐条记录",
+                # Data credibility
+                "Data returned by tools takes priority over the model's training knowledge — when in conflict, defer to tool results",
+                "All citations must come from actual tool-returned results; never fabricate NASA report numbers/DOIs/paper titles from memory",
+                "Numerical computation results must specify computation method, assumed conditions, and parameter sources",
+                "Computation results must clearly distinguish between 'conditional computation based on assumptions' or 'literature-verified values'",
+                "Uncertain or out-of-scope content must be clearly marked as 'to be verified'",
+                "Do not fabricate data, invent citations, or make unsupported quantitative extrapolations",
+                # Hypothesis generation
+                "Generated hypotheses must pass physical constraint verification (parameter bounds, flow regime consistency, conservation laws)",
+                "Hypothesis predictions must be specifically verifiable (numerical values or clear trends)",
+                # Catalytic recombination coefficient special focus
+                "Catalytic recombination coefficients must specify recombination species (O/N/mixed), surface type (quartz/RCG/SiC/Pt, etc.), and reference conditions",
+                "Temperature trends for catalytic coefficients must cite verifiable literature or tool computations; cannot rely solely on empirical intuition",
+                # Documentation
+                "Upon task completion, must call generate_report tool to save conclusions as Markdown report",
+                "When key conclusions are discovered during research, call export_finding to record them entry by entry",
             ],
             mode=self.mode,
             max_react_steps=self.max_react_steps,

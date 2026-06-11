@@ -194,3 +194,202 @@ python app.py --llm custom --port 7860
 2. `1_模型下载与数据注册.ipynb` — 下载基座 + 注册数据集
 3. `2_训练与导出.ipynb` — QLoRA 微调 + 合并导出
 4. `3_推理与Agent部署.ipynb` — vLLM + Agent Gradio 上线
+
+---
+
+# Hypersonic Gas-Solid Thermal Coupling AI Agent — System Overview
+
+> **AI Scientist** for Hypersonic Gas-Solid Interface Coupling — From Passive Q&A to Autonomous Research
+> Built on LLM + 10-tool Agent + Physics Constraint Verification; supports closed-loop hypothesis generation, experimental design, and paper generation
+
+---
+
+## Positioning
+
+```
+Q&A Expert (v1)                  AI Scientist (v2) 🆕
+     ↓                              ↓
+Answer "what is it"              Solve "why + what else"
+Retrieval + Reasoning → Report   Hypothesis → Experiment → Paper → Review
+     9 tools                        10 tools (+ HypothesisGenerator)
+```
+
+**LLM** = The expert's brain (fine-tuned domain knowledge + RAG + SiliconFlow/Bailian API)
+**Agent** = The scientist's hands and eyes (tool calling + multi-step reasoning + hypothesis generation + physics constraint verification)
+
+---
+
+## Architecture Sketch
+
+```
+User Input
+  ↓
+Orchestration Engine (ReAct / Plan-Execute)
+  ├── Toolchain (10 tools: literature search, numerical computation, paper parsing, format export, **hypothesis generation**)
+  ├── Memory System (conversation history, research context, RAG bridging)
+  ├── Physics Constraint Layer (PhysicsConstraintLayer: parameter bounds / flow regime / conservation law verification)
+  └── LLM Reasoning Core (fine-tuned expert model + RAG + System Prompt)
+  ↓
+Multi-step Reasoning → Evidence Chain Synthesis → Hypothesis Generation → Critical Verification → Output
+```
+
+---
+
+## Subdirectories
+
+| Directory | Purpose | Key Outputs |
+|------|------|----------|
+| `01_架构设计/` | Agent overall architecture + 🆕 **AI Scientist 5-module design** | Architecture plan + AI Scientist documentation |
+| `02_工具链/` | Tool definitions (search/compute/parse), Function Schema | Tool registry |
+| `03_编排引擎/` | Reasoning routing, ReAct loop, Plan-Execute state machine | Orchestration logic |
+| `04_记忆系统/` | Short-term conversation memory, long-term research context, knowledge cache | Memory management |
+| `05_评测基准/` | Task completion rate, tool call accuracy, hallucination detection | Evaluation framework |
+| `06_部署集成/` | API service, Gradio UI, frontend integration | Deployment plan |
+
+---
+
+## Collaboration with the LLM Pipeline
+
+```
+03_知识工程/        ← Shared data foundation for Agent and LLM
+├── 文献库          ← Index source for Agent retrieval tools
+├── QA 数据集       ← Training data for LLM fine-tuning
+├── 向量索引        ← Core component for RAG retrieval
+└── 知识图谱        ← Foundation layer for Agent structured reasoning (planned)
+
+04_LLM微调线/       ← Agent's reasoning core
+└── LoRA 权重       ← Expert model called by Agent
+```
+
+---
+
+## Current Status
+
+**Phase 2: AI Scientist Leap** (started 2026-06-09)
+
+- [x] Agent framework selection → Custom lightweight framework (modeled after MetaGPT Role-Action-Memory)
+- [x] Core framework implementation → `core/` (Role + Action + Memory + Orchestrator + LLM Interface)
+- [x] Built-in toolset → `tools/` (**10 tools**)
+- [x] Bailian API running full Agent workflow → First technical report generated
+- [x] Gradio Web UI → `app.py`
+- [x] DSW deployment notebooks → 4 new notebooks (environment/download/training/deployment)
+- [x] **HypothesisGenerator** → `tools/hypothesis.py` (AI Scientist core, LLM injection architecture)
+- [x] **PhysicsConstraintLayer** → `tools/physics_constraints.py` (physics constraint verification)
+- [x] **AI Scientist 5-module design document** → `01_架构设计/AI_Scientist_模块设计/`
+- [x] **SiliconFlow API preset** → `--llm siliconflow` (DeepSeek-V3, 1+2 ¥/M)
+- [ ] FAISS semantic retrieval activation (requires embedding model configuration)
+- [ ] End-to-end fine-tuned model validation (pending DSW training completion)
+- [ ] Agent evaluation benchmark (`05_评测基准/`)
+- [ ] ExperimentDesigner / ResultAnalyzer / PaperWriter / AutoReviewer implementation
+
+### Recent Updates (2026-06-11)
+
+**Security Audit Fixes**:
+- `core/orchestrator.py`: JSON parsing exception protection (try/except); new `_BoundedCache` LRU bounded cache (max=100), replacing unlimited dict cache
+- `tools/code_exec.py`: pip install parameter injection defense (package name whitelist regex + prohibited `--index-url` and other dangerous flags)
+- `.env`: Bailian API Key rotated
+
+**System Prompt Hallucination Defense Strengthening**:
+- `core/role.py`: Added Rule 3 (mandatory parameter traceability), Rule 8 (tool warning propagation), Rule 11 (formula names must exactly match tool returns), Rule 12 (supplementary data source annotation)
+- `tools/search.py`: DOI filtering, literature without DOI not passed to LLM
+
+**End-to-End Validation**:
+- Apollo stagnation point heat flux ReAct test passed (3.89 MW/m², complete toolchain: stagnation_heat_flux → knudsen_number → export_finding → generate_report)
+
+---
+
+## Toolchain (10 Tools)
+
+| # | Tool | File | Function |
+|---|------|------|------|
+| 1 | LiteratureSearchTool | `search.py` | Local CSV keyword + FAISS semantic search (3,326 papers) |
+| 2 | WebSearchTool | `web_search.py` | OpenAlex API global academic literature search (2.5 billion+ papers) |
+| 3 | AeroThermalComputeTool | `compute.py` | Stagnation heat flux / Knudsen / catalytic coefficient / unit conversion / boundary layer |
+| 4 | CodeExecutionTool | `code_exec.py` | Python subprocess sandbox execution (30s timeout, supports pip install) |
+| 5 | CitationResolverTool | `citation.py` | CrossRef / OpenAlex DOI resolution + BibTeX generation |
+| 6 | PDFAnalysisTool | `pdf_parser.py` | PyMuPDF paper parsing (metadata/full-text/sections/parameter recognition/search) |
+| 7 | ReportTool | `report.py` | Structured Markdown research report generation |
+| 8 | ExportFindingTool | `report.py` | Single research finding append recording |
+| 9 | PandocExportTool | `pandoc_export.py` | Markdown → LaTeX / DOCX / PDF (XeLaTeX + CJK) |
+| 10 | 🆕 **HypothesisGenerator** | `hypothesis.py` | LLM injection architecture: literature retrieval → Gap identification → Hypothesis generation → Physics constraint verification → Scoring & ranking |
+
+---
+
+## Framework Overview
+
+```
+core/
+├── message.py      # Message body (user/agent/system/tool)
+├── llm.py          # OpenAI-compatible API interface (vLLM / Bailian / Ollama)
+├── action.py       # Tool base class + registry
+├── memory.py       # Short-term + working + long-term memory
+├── role.py         # Agent identity / goals / constraints
+├── orchestrator.py # ReAct + Plan-Execute loop
+└── agent.py        # Top-level entry, assembles everything
+
+tools/
+├── search.py       # Literature search (FAISS + CSV)
+├── web_search.py   # OpenAlex external literature search
+├── compute.py      # Aerothermal parameter computation
+├── code_exec.py    # Python code sandbox execution
+├── citation.py     # DOI citation resolution
+├── pdf_parser.py   # PDF paper parsing
+├── report.py       # Report generation + finding records
+├── pandoc_export.py # Format export (LaTeX/DOCX/PDF)
+├── hypothesis.py   # 🆕 AI Scientist: hypothesis generator (LLM injection)
+└── physics_constraints.py # 🆕 Physics constraint verification layer
+
+config.py           # Unified configuration (5 LLM presets: bailian/siliconflow/vllm_local/ollama/custom)
+run_agent.py        # CLI entry point (--llm siliconflow 🆕)
+app.py              # Gradio Web UI entry
+```
+
+---
+
+## Quick Start
+
+### CLI Mode
+
+```bash
+cd 05_AI_Agent
+
+# Interactive mode (Bailian API, ready to use)
+python run_agent.py --llm bailian
+
+# SiliconFlow (best cost-performance, DeepSeek-V3)
+python run_agent.py --llm siliconflow
+
+# Single task
+python run_agent.py --llm bailian --task "计算马赫数15下的驻点热流密度"
+
+# Plan-Execute mode
+python run_agent.py --llm bailian --mode plan_execute --task "评估气固界面催化模型跨尺度适用性"
+
+# AI Scientist: hypothesis generation
+python run_agent.py --llm bailian --verbose --task "分析气固界面催化系数建模的研究Gap，生成3个可验证假设"
+
+# Custom LLM endpoint (vLLM / Ollama etc.)
+python run_agent.py --llm custom --base-url http://localhost:8000/v1
+```
+
+### Gradio Web UI
+
+```bash
+# Bailian API
+python app.py --llm bailian
+
+# vLLM local
+python app.py --llm vllm_local
+
+# DSW deployment (auto-fetch public URL)
+python app.py --llm custom --port 7860
+```
+
+### DSW Deployment
+
+Execute the 4 notebooks under `04_LLM微调线/04_推理部署/` in order:
+
+1. `0_DSW环境部署.ipynb` — One-click environment setup
+2. `1_模型下载与数据注册.ipynb` — Download base model + register dataset
+3. `2_训练与导出.ipynb` — QLoRA fine-tuning + merge and export
+4. `3_推理与Agent部署.ipynb` — vLLM + Agent Gradio deployment

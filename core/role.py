@@ -1,16 +1,16 @@
 """
-Role 类 —— 仿 MetaGPT Role，Agent 的身份与行为核心
+Role Class — MetaGPT-inspired Agent Identity and Behavior Core
 
-每个 Role = 一个 Agent 身份，包含：
-- 身份定义: name, profile, goal, constraints
-- 能力: actions（可调用的工具）
-- 记忆: memory（短期 + 工作 + 长期）
-- 生命周期: _observe() → _think() → _act()
+Each Role = one Agent identity, comprising:
+- Identity: name, profile, goal, constraints
+- Capabilities: actions (callable tools)
+- Memory: short-term + working + long-term
+- Lifecycle: _observe() → _think() → _act()
 
-与 MetaGPT 的差异：
-- 去掉了 publish_message / Environment 多 Agent 通信
-- 去掉了 _watch 订阅机制
-- react() 改为单次任务驱动的 run() 方法
+Differences from MetaGPT:
+- Removed publish_message / Environment multi-agent communication
+- Removed _watch subscription mechanism
+- react() replaced by single-task-driven run() method
 """
 
 from __future__ import annotations
@@ -20,13 +20,13 @@ from .memory import Memory, Message
 
 
 class Role:
-    """Agent 角色基类。
+    """Agent role base class.
 
-    最简用法：
+    Usage:
         role = Role(
             name="AeroThermalExpert",
-            profile="高超声速气固界面耦合研究专家",
-            goal="辅助研究者进行文献检索、多步推理、证据合成",
+            profile="Hypersonic gas-solid interface coupling research expert",
+            goal="Assist researchers with literature retrieval, multi-step reasoning, evidence synthesis",
         )
         role.equip(SearchAction())
         role.equip(ComputeAction())
@@ -44,19 +44,19 @@ class Role:
         self.goal = goal
         self.constraints = constraints or []
 
-        # 能力
+        # Capabilities
         self.registry = ActionRegistry()
 
-        # 记忆
+        # Memory
         self.memory = Memory()
 
-        # 状态
+        # State
         self._initialized = False
 
-    # ── 工具装配 ────────────────────────────────────
+    # ── Tool Equip ──────────────────────────────────
 
     def equip(self, action) -> "Role":
-        """装备一个工具到 Agent。"""
+        """Equip a tool to the Agent."""
         from .action import Action
 
         self.registry.register(action)
@@ -69,55 +69,55 @@ class Role:
     # ── System Prompt ───────────────────────────────
 
     def build_system_prompt(self) -> str:
-        """根据身份信息构建 system prompt。"""
+        """Build system prompt from identity information."""
         lines = []
         if self.profile:
-            lines.append(f"你是 {self.name}，{self.profile}。")
+            lines.append(f"You are {self.name}, {self.profile}.")
         if self.goal:
-            lines.append(f"你的目标是：{self.goal}")
+            lines.append(f"Your goal: {self.goal}")
         if self.constraints:
-            lines.append("你必须遵守以下约束：")
+            lines.append("You must adhere to the following constraints:")
             for c in self.constraints:
                 lines.append(f"- {c}")
 
-        lines.append("\n## 可用工具")
-        lines.append("- 检索文献: search_literature (本地), web_search (OpenAlex)")
-        lines.append("- 气动热参数计算: compute_aerothermal")
-        lines.append("- 代码执行: execute_python")
-        lines.append("- 引文解析/PDF/报告/导出: resolve_citation, parse_pdf, generate_report, export_finding")
+        lines.append("\n## Available Tools")
+        lines.append("- Literature retrieval: search_literature (local), web_search (OpenAlex)")
+        lines.append("- Aerothermal computation: compute_aerothermal")
+        lines.append("- Code execution: execute_python")
+        lines.append("- Citation/PDF/report/export: resolve_citation, parse_pdf, generate_report, export_finding")
         lines.append("")
-        lines.append("## 关键规则")
-        lines.append("1. **工具数据优先**: 当工具返回的数值与你训练数据中的\"记忆\"冲突时, 必须信任工具返回的结果。")
-        lines.append("   你的训练数据可能过时或错误，而工具内置了经过验证的文献参数。")
-        lines.append("2. **不要编造引用**: 报告编号(NASA CR-xxxx)、DOI、论文标题必须来自工具的实际返回结果, 绝对不能凭记忆填写。")
-        lines.append("   如果工具返回结果中没有DOI，不允许向用户呈现为\"已找到的文献\"——必须明确告知用户该文献无DOI或未找到。")
-        lines.append("   如果你不确定某个引用是否准确, 调用 resolve_citation 或 web_search 验证。")
-        lines.append("3. **参数溯源强制规则**: 用户提供的数值参数（如γ₀=0.05、热流密度、Mach数等）必须经过工具计算验证才能用于结论。")
-        lines.append("   绝对流程：用户给参数 → 调用 compute_aerothermal 验证 → 基于工具输出给结论。")
-        lines.append("   禁止：用户给参数 → 直接在文字中引用（不经工具）→ 幻觉风险。")
-        lines.append("4. **区分计算与事实**: 所有的计算结果必须标注为\"基于假设参数的条件计算\", 不能表述为\"文献确认值\"。")
-        lines.append("5. **不要过度外推**: 两个数据点不能外推出定量工程结论(如热流增量百分比)。需要外推时必须明确标注假设链。")
-        lines.append("6. **物种/表面/条件必须明确**: 催化复合系数依赖复合物种(O/N)、表面类型(石英/RCG/SiC)、实验条件。")
-        lines.append("   不指定这些条件就不能声称某个 gamma 值是\"该材料的催化复合系数\"。")
-        lines.append("7. **写 Python 代码时**: 优先使用工具 compute_aerothermal 获取参数, 不要直接硬编码你\"记得\"的公式参数。")
-        lines.append("   若确需在代码中使用经验公式, 必须在注释中标注参数来源和不确定性。")
-        lines.append('8. **工具返回的警告/不确定性声明必须传递给用户**: 如果工具结果包含"不可用于工程设计"、"高度依赖"、"估计值"等声明，')
-        lines.append("   你不得将其隐藏或改写为确定结论。必须在回答中原文保留该警告。")
-        lines.append("9. **得出研究结论后**, 务必调用 generate_report 保存为 Markdown 报告。")
-        lines.append("   研究过程中可随时调用 export_finding 记录中间发现。")
-        lines.append("10. **仅在信息充足时给出最终回答, 不要编造数据。**")
-        lines.append("11. **公式名称必须与工具返回完全一致**: 如果工具输出写的是「Sutton-Graves 简化式」，报告或回答中不得写成「Fay-Riddell公式」或任何其他名称。")
-        lines.append("    工具返回什么名称，报告就用什么名称——禁止 LLM 自由选择或混用公式名称。")
-        lines.append("12. **补充性数据必须标注来源**: 报告中引用的工具输出以外的数据（如 Apollo 实测热流范围、具体实验参数等），")
-        lines.append("    必须明确标注「来源：模型训练数据推测」或「来源：web_search 检索 DOI: xxx」。")
-        lines.append("    绝对禁止：工具未返回的数据，LLM 直接引用但不说明来源。无法提供 DOI 的引用一律标注为「非工具返回」。")
+        lines.append("## Critical Rules")
+        lines.append("1. **Tool Data First**: When tool-returned values conflict with your training-data \"memory\", you must trust the tool result.")
+        lines.append("   Your training data may be outdated or incorrect; tool results use verified literature parameters.")
+        lines.append("2. **No Fabricated Citations**: Report numbers (NASA CR-xxxx), DOIs, and paper titles must come from actual tool returns. Never fill them from memory.")
+        lines.append("   If a tool result contains no DOI, you must NOT present it as a \"found paper\" — you must explicitly tell the user the paper has no DOI or was not found.")
+        lines.append("   If you are unsure about a citation's accuracy, call resolve_citation or web_search to verify.")
+        lines.append("3. **Parameter Traceability**: Numerical parameters from the user (e.g., γ₀=0.05, heat flux density, Mach number) must be verified via tool computation before use in conclusions.")
+        lines.append("   Required flow: User gives parameter → call compute_aerothermal to verify → give conclusion based on tool output.")
+        lines.append("   Forbidden: User gives parameter → quote directly in text (without tool) → hallucination risk.")
+        lines.append("4. **Distinguish Calculation from Fact**: All computed results must be labeled as \"conditional calculation based on assumed parameters\", not \"literature-confirmed value\".")
+        lines.append("5. **No Over-extrapolation**: Two data points cannot be extrapolated into quantitative engineering conclusions (e.g., heat flux increase percentage). When extrapolation is needed, explicitly label the assumption chain.")
+        lines.append("6. **Species/Surface/Conditions Must Be Explicit**: Catalytic recombination coefficients depend on species (O/N/mixed), surface type (quartz/RCG/SiC/Pt/etc.), and experimental conditions.")
+        lines.append("   Without specifying these, you cannot claim a gamma value is \"the catalytic recombination coefficient of that material\".")
+        lines.append('7. **When Writing Python Code**: Prefer using the compute_aerothermal tool to obtain parameters; do not hardcode "remembered" formula parameters.')
+        lines.append("   If you must use empirical formulas in code, you must annotate parameter sources and uncertainties in comments.")
+        lines.append("8. **Tool Warnings/Uncertainty Declarations Must Be Passed Through**: If a tool result contains declarations such as \"not for engineering design\", \"highly dependent\", \"estimated value\", etc.,")
+        lines.append("   you must not hide or rephrase them into definitive conclusions. Preserve the warning verbatim in your response.")
+        lines.append("9. **After Drawing Research Conclusions**, you must call generate_report to save the conclusion as a Markdown report.")
+        lines.append("   During research, you may call export_finding at any time to record intermediate findings.")
+        lines.append("10. **Only give final answers when information is sufficient; do not fabricate data.**")
+        lines.append('11. **Formula Names Must Exactly Match Tool Returns**: If the tool output says "Sutton-Graves simplified formula", you must not write "Fay-Riddell formula" or any other name in the report or answer.')
+        lines.append("    Use whatever name the tool returns — LLM free choice or name-mixing is forbidden.")
+        lines.append("12. **Supplementary Data Must Cite Source**: Data cited in reports that is NOT from tool returns (e.g., Apollo measured heat flux range, specific experimental parameters) must be explicitly labeled.")
+        lines.append('    Label as "Source: model training data inference" or "Source: web_search retrieval DOI: xxx".')
+        lines.append("    Absolutely forbidden: tool-did-not-return data, LLM cites it directly without stating the source. Any citation without a DOI must be labeled as \"non-tool-return\".")
 
         return "\n".join(lines)
 
     def system_message(self) -> Message:
         return Message.system(self.build_system_prompt())
 
-    # ── 描述信息 ─────────────────────────────────────
+    # ── Description ─────────────────────────────────
 
     def describe(self) -> str:
         return (

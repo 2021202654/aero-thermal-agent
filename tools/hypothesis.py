@@ -1,8 +1,8 @@
 """
-假设生成器 —— AI Scientist 核心模块
+Hypothesis Generator — AI Scientist Core Module
 
-从文献 Gap 到可验证科学假设，融入物理方程约束验证。
-流程：文献检索 → Gap 识别 → 假设生成 → 物理约束验证 → 评分排序
+From literature Gap to verifiable scientific hypotheses, incorporating physics equation constraint validation.
+Flow: Literature Retrieval → Gap Identification → Hypothesis Generation → Physics Constraint Validation → Scoring & Ranking
 """
 
 from __future__ import annotations
@@ -18,43 +18,43 @@ from .search import LiteratureSearchTool
 from .web_search import WebSearchTool
 
 
-# ── Prompt 模板 ──────────────────────────────────────
+# ── Prompt Template ───────────────────────────────────
 
 HYPOTHESIS_GENERATION_PROMPT = """\
-你是高超声速气固界面耦合领域的假设生成专家。基于文献综述识别研究Gap，生成可验证假设。
+You are a hypothesis generation expert in the field of hypersonic gas-solid interface coupling. Identify research gaps from literature review and generate verifiable hypotheses.
 
-# 文献综述
+# Literature Review
 {literature_review}
 
-# 已知知识边界
+# Known Knowledge Boundaries
 {knowledge_boundary}
 
-# 物理约束
+# Physics Constraints
 {physics_constraints}
 
-# Gap 识别框架
-- L1 矛盾点：不同文献对同一现象给出矛盾结论
-- L2 未覆盖区域：参数范围或工况缺乏数据
-- L3 过度简化：模型忽略重要物理效应
-- L4 跨尺度不一致：连续介质假设在稀薄区失效
+# Gap Identification Framework
+- L1 Contradiction: Different papers give conflicting conclusions on the same phenomenon
+- L2 Uncovered Region: Parameter range or operating conditions lacking data
+- L3 Over-simplification: Model ignores important physical effects
+- L4 Cross-scale Inconsistency: Continuum assumption fails in rarefied regime
 
-# 要求
-- 假设必须可验证、符合物理定律、有明确成功判据
-- description 控制在50字以内，evidence 最多2条，hypothesis 控制在80字以内
-- 输出严格 JSON，不要任何额外文字
+# Requirements
+- Hypotheses must be verifiable, comply with physical laws, have clear success criteria
+- description ≤ 50 characters, evidence ≤ 2 items, hypothesis ≤ 80 characters
+- Output strict JSON only, no extra text
 
-# 输出格式
+# Output Format
 {{
   "gap_analysis": [
     {{
       "level": 1,
-      "description": "Gap简述（≤50字）",
-      "evidence": ["证据1"],
+      "description": "Gap description (≤50 chars)",
+      "evidence": ["Evidence 1"],
       "hypotheses": [
         {{
-          "hypothesis": "假设（≤80字）",
-          "prediction": "预测（数值或趋势）",
-          "validation_method": "验证方法",
+          "hypothesis": "Hypothesis (≤80 chars)",
+          "prediction": "Prediction (value or trend)",
+          "validation_method": "Validation method",
           "innovation_score": 80,
           "feasibility_score": 80,
           "scientific_value_score": 80
@@ -66,22 +66,22 @@ HYPOTHESIS_GENERATION_PROMPT = """\
 """
 
 
-# ── 假设生成器工具 ──────────────────────────────────
+# ── Hypothesis Generator Tool ─────────────────────────
 
 
 class HypothesisGenerator(Action):
-    """假设生成器 —— 基于文献 Gap 生成可验证的科学假设。
+    """Hypothesis Generator — generates verifiable scientific hypotheses based on literature gaps.
 
-    AI Scientist 的核心入口。从被动问答跃迁到主动假设生成。
+    Core entry point for AI Scientist. Transitions from passive Q&A to active hypothesis generation.
     """
 
     name = "generate_hypothesis"
     description = (
-        "基于气固热导领域文献，识别研究 Gap 并生成可验证的科学假设。"
-        "支持 4 级 Gap 识别（矛盾/未覆盖/过度简化/跨尺度不一致），"
-        "自动进行物理约束验证（催化效率、Kn数、守恒律等），"
-        "输出结构化假设列表（含创新性/可行性/科学价值评分）。"
-        "输入研究主题关键词，返回排序后的假设。"
+        "Based on gas-solid thermal conduction domain literature, identify research gaps and generate verifiable scientific hypotheses. "
+        "Supports 4-level gap identification (contradiction / uncovered / over-simplified / cross-scale inconsistent), "
+        "automatically performs physics constraint validation (catalytic efficiency, Kn number, conservation laws, etc.), "
+        "outputs structured hypothesis list (including innovation / feasibility / scientific value scores). "
+        "Input research topic keywords, return ranked hypotheses."
     )
     parameters = {
         "type": "object",
@@ -89,20 +89,20 @@ class HypothesisGenerator(Action):
             "topic": {
                 "type": "string",
                 "description": (
-                    "研究主题关键词，英文。"
-                    "例如: 'catalytic recombination modeling gap', "
+                    "Research topic keywords, in English. "
+                    "Example: 'catalytic recombination modeling gap', "
                     "'gas-surface interaction Knudsen transition', "
                     "'TPS material comparison'"
                 ),
             },
             "max_hypotheses": {
                 "type": "integer",
-                "description": "最大假设数量，默认5，最多10",
+                "description": "Maximum number of hypotheses, default 5, max 10",
                 "default": 5,
             },
             "gap_level": {
                 "type": "integer",
-                "description": "Gap 层级过滤：0=全部，1=矛盾，2=未覆盖，3=过度简化，4=跨尺度",
+                "description": "Gap level filter: 0=all, 1=contradiction, 2=uncovered, 3=over-simplified, 4=cross-scale",
                 "default": 0,
             },
         },
@@ -115,14 +115,14 @@ class HypothesisGenerator(Action):
         search_tool: LiteratureSearchTool | None = None,
         web_tool: WebSearchTool | None = None,
     ):
-        """构造器注入 LLM 实例和可选的检索工具。
+        """Constructor injects LLM instance and optional retrieval tools.
 
         Args:
-            llm: LLM 接口，用于 Gap 分析和假设生成
-            search_tool: 本地文献检索工具，None 则内部创建
-            web_tool: OpenAlex 外部检索工具，None 则内部创建
+            llm: LLM interface for gap analysis and hypothesis generation
+            search_tool: Local literature retrieval tool; None creates internally
+            web_tool: OpenAlex external retrieval tool; None creates internally
         """
-        # 假设生成需要更长的输出，创建专用 LLM 实例（max_tokens=4096）
+        # Hypothesis generation requires longer output; create dedicated LLM instance (max_tokens=4096)
         from core.llm import LLMConfig
         self.llm = llm
         hyp_config = LLMConfig(
@@ -130,7 +130,7 @@ class HypothesisGenerator(Action):
             api_key=llm.config.api_key,
             model=llm.config.model,
             temperature=llm.config.temperature,
-            max_tokens=8192,  # 假设生成 JSON 较长，需要充足空间
+            max_tokens=8192,  # Hypothesis JSON is verbose; need sufficient space
             timeout=llm.config.timeout,
         )
         self._hypothesis_llm = LLMInterface(hyp_config)
@@ -138,29 +138,29 @@ class HypothesisGenerator(Action):
         self.web_tool = web_tool or WebSearchTool()
         self.physics = PhysicsConstraintLayer()
 
-    # ── 主入口 ────────────────────────────────────
+    # ── Main Entry ───────────────────────────────────
 
     async def run(self, topic: str, max_hypotheses: int = 5, gap_level: int = 0) -> str:
-        """执行假设生成流程。"""
+        """Execute hypothesis generation pipeline."""
         max_hypotheses = min(max_hypotheses, 10)
         gap_level = max(0, min(gap_level, 4))
 
-        # Step 1: 本地文献检索
+        # Step 1: Local literature retrieval
         try:
             lit_results = await self.search_tool.run(query=topic, top_k=10)
         except Exception as e:
-            lit_results = f"[文献检索异常] {e}"
+            lit_results = f"[Literature retrieval error] {e}"
 
-        # Step 2: OpenAlex 补充最新研究
+        # Step 2: OpenAlex supplement for latest research
         try:
             web_results = await self.web_tool.run(query=topic)
         except Exception as e:
-            web_results = f"[OpenAlex 检索异常] {e}"
+            web_results = f"[OpenAlex retrieval error] {e}"
 
-        # Step 3: 组装文献综述
-        literature_review = f"## 本地文献库检索结果\n{lit_results}\n\n## OpenAlex 最新研究\n{web_results}"
+        # Step 3: Assemble literature review
+        literature_review = f"## Local Literature Database Retrieval Results\n{lit_results}\n\n## OpenAlex Latest Research\n{web_results}"
 
-        # Step 4: 构建 prompt
+        # Step 4: Build prompt
         knowledge_boundary = self._build_knowledge_boundary(topic)
         physics_constraints = self.physics.format_constraints_brief()
 
@@ -170,53 +170,51 @@ class HypothesisGenerator(Action):
             physics_constraints=physics_constraints,
         )
 
-        # Step 5: LLM 生成假设（使用专用长输出实例）
+        # Step 5: LLM generate hypotheses (using dedicated long-output instance)
         try:
             response = await self._hypothesis_llm.chat([Message.user(prompt)])
             raw_content = response.content
         except Exception as e:
             return json.dumps(
-                {"error": f"LLM 调用失败: {e}", "literature_review": literature_review},
+                {"error": f"LLM call failed: {e}", "literature_review": literature_review},
                 indent=2,
                 ensure_ascii=False,
             )
 
-        # Step 6: 解析 LLM 输出
+        # Step 6: Parse LLM output
         parsed = self._parse_llm_output(raw_content)
 
-        # Step 7: 物理约束验证
+        # Step 7: Physics constraint validation
         parsed = self._validate_with_physics(parsed)
 
-        # Step 8: Gap 层级过滤
+        # Step 8: Gap level filtering
         if gap_level > 0:
             parsed = self._filter_by_gap_level(parsed, gap_level)
 
-        # Step 9: 截断并排序
+        # Step 9: Truncate and rank
         parsed = self._rank_and_truncate(parsed, max_hypotheses)
 
-        # Step 10: 格式化输出
+        # Step 10: Format output
         return self._format_output(parsed, topic)
 
-    # ── 内部方法 ──────────────────────────────────
+    # ── Internal Methods ─────────────────────────────
 
     def _build_knowledge_boundary(self, topic: str) -> str:
-        """构建已知知识边界描述（精简版）。"""
+        """Build known knowledge boundary description (concise version)."""
         return (
-            f"主题：{topic}\n"
-            "已知边界：γ ∈ [0,1]; σ_v,σ_T ∈ [0,1]; 连续流 Kn<0.01; "
-            "Fay-Riddell 仅适用平衡催化壁面; 高超声速 Ma∈[5,30]; "
-            "TPS材料: SiO₂,SiC,Al₂O₃,C-Phenolic,RCG; T>2000K 高温效应显著"
+            f"Topic: {topic}\n"
+            "Known boundaries: gamma in [0,1]; sigma_v, sigma_T in [0,1]; continuum Kn<0.01; "
+            "Fay-Riddell only applicable for equilibrium catalytic wall; hypersonic Ma in [5,30]; "
+            "TPS materials: SiO2, SiC, Al2O3, C-Phenolic, RCG; T>2000K high-temperature effects significant"
         )
 
     def _parse_llm_output(self, raw: str) -> dict[str, Any]:
-        """解析 LLM 输出为 JSON。支持截断 JSON 修复。"""
-        # 尝试提取 JSON 块
+        """Parse LLM output as JSON. Supports truncated JSON repair."""
         text = raw.strip()
 
-        # 去掉 markdown 代码块包裹
+        # Remove markdown code block wrapper
         if text.startswith("```"):
             lines = text.split("\n")
-            # 去首尾 ```行
             lines = [l for l in lines if not l.strip().startswith("```")]
             text = "\n".join(lines)
 
@@ -225,7 +223,7 @@ class HypothesisGenerator(Action):
         except json.JSONDecodeError:
             pass
 
-        # 尝试找 JSON 花括号范围
+        # Try finding JSON brace range
         start = text.find("{")
         end = text.rfind("}") + 1
         if start >= 0 and end > start:
@@ -234,45 +232,44 @@ class HypothesisGenerator(Action):
             except json.JSONDecodeError:
                 pass
 
-        # 尝试修复截断的 JSON：补全未闭合的括号
+        # Try repairing truncated JSON: complete unclosed brackets
         if start >= 0:
             snippet = text[start:]
             repaired = self._repair_json(snippet)
             if repaired is not None:
                 return repaired
 
-        # 解析失败，返回原始文本
+        # Parse failed, return raw text
         return {
             "gap_analysis": [],
             "raw_output": text,
-            "parse_error": "LLM 输出无法解析为 JSON",
+            "parse_error": "LLM output could not be parsed as JSON",
         }
 
     def _repair_json(self, snippet: str) -> dict[str, Any] | None:
-        """尝试修复截断的 JSON（补全括号）。"""
-        # 计算未闭合的括号
+        """Attempt to repair truncated JSON (complete brackets)."""
+        # Count unclosed brackets
         open_braces = snippet.count("{") - snippet.count("}")
         open_brackets = snippet.count("[") - snippet.count("]")
 
         if open_braces < 0 or open_brackets < 0:
-            return None  # 括号多了，不是简单截断
+            return None  # Extra closing brackets, not simple truncation
 
-        # 补全：先关闭未完成的字符串，再关闭括号
+        # Complete: close unclosed strings then brackets
         repaired = snippet.rstrip()
 
-        # 尝试在最后一个完整的值后截断，补全括号
-        # 去掉最后一个不完整的键值对
+        # Try trimming last incomplete key-value pair
         for trim_pattern in [",\n", ",\r\n", ",", "\n", "\r\n"]:
             idx = repaired.rfind(trim_pattern)
             if idx > 0:
                 repaired = repaired[:idx]
                 break
 
-        # 补全未闭合的引号
+        # Complete unclosed quotes
         if repaired.count('"') % 2 != 0:
             repaired += '"'
 
-        # 补全括号
+        # Complete brackets
         repaired += "]" * max(0, open_brackets)
         repaired += "}" * max(0, open_braces)
 
@@ -282,16 +279,16 @@ class HypothesisGenerator(Action):
             return None
 
     def _validate_with_physics(self, parsed: dict[str, Any]) -> dict[str, Any]:
-        """用物理约束验证每个假设。"""
+        """Validate each hypothesis against physics constraints."""
         for gap in parsed.get("gap_analysis", []):
             for hyp in gap.get("hypotheses", []):
-                # 收集参数
+                # Collect parameters
                 params = {}
                 for p in hyp.get("parameters", []):
                     if p.get("value") is not None:
                         params[p["name"]] = p["value"]
 
-                # 验证
+                # Validate
                 valid, reason = self.physics.validate_hypothesis(
                     hyp.get("hypothesis", ""), params
                 )
@@ -303,7 +300,7 @@ class HypothesisGenerator(Action):
         return parsed
 
     def _filter_by_gap_level(self, parsed: dict[str, Any], gap_level: int) -> dict[str, Any]:
-        """按 Gap 层级过滤。"""
+        """Filter by gap level."""
         filtered = [
             gap for gap in parsed.get("gap_analysis", [])
             if gap.get("level") == gap_level
@@ -312,19 +309,19 @@ class HypothesisGenerator(Action):
         return parsed
 
     def _rank_and_truncate(self, parsed: dict[str, Any], max_h: int) -> dict[str, Any]:
-        """评分排序并截断。"""
+        """Score, rank, and truncate."""
         all_hypotheses = []
 
         for gap_idx, gap in enumerate(parsed.get("gap_analysis", [])):
             for hyp_idx, hyp in enumerate(gap.get("hypotheses", [])):
-                # 综合评分 = 加权平均
+                # Composite score = weighted average
                 inn = hyp.get("innovation_score", 50)
                 fea = hyp.get("feasibility_score", 50)
                 sci = hyp.get("scientific_value_score", 50)
-                # 权重：创新 0.35 + 可行 0.30 + 价值 0.35
+                # Weights: innovation 0.35 + feasibility 0.30 + value 0.35
                 composite = 0.35 * inn + 0.30 * fea + 0.35 * sci
 
-                # 物理验证未通过则降权
+                # Penalize if physics validation failed
                 if not hyp.get("physics_validation", {}).get("valid", True):
                     composite *= 0.5
 
@@ -333,13 +330,13 @@ class HypothesisGenerator(Action):
                 hyp["_hyp_idx"] = hyp_idx
                 all_hypotheses.append(hyp)
 
-        # 按综合评分降序
+        # Sort by composite score descending
         all_hypotheses.sort(key=lambda h: h.get("composite_score", 0), reverse=True)
 
-        # 截断
+        # Truncate
         parsed["ranked_hypotheses"] = all_hypotheses[:max_h]
 
-        # 更新 top_hypothesis_index
+        # Update top_hypothesis_index
         if all_hypotheses:
             top = all_hypotheses[0]
             parsed["top_hypothesis_index"] = {
@@ -351,75 +348,74 @@ class HypothesisGenerator(Action):
         return parsed
 
     def _format_output(self, parsed: dict[str, Any], topic: str) -> str:
-        """格式化输出为人类可读 + JSON 混合格式。"""
-        # 如果解析失败，返回干净的摘要（不输出截断 JSON，避免污染 LLM 上下文）
+        """Format output as human-readable + JSON mixed format."""
+        # If parse failed, return clean summary (avoid polluting LLM context with truncated JSON)
         if "parse_error" in parsed:
             raw = parsed.get("raw_output", "")
-            # 提取已成功解析的部分做摘要
             preview = raw[:300].replace("\n", " ") if raw else ""
             return (
-                f"⚠️ 假设生成遇到问题：{parsed['parse_error']}。LLM 输出可能被截断，"
-                f"建议缩小检索范围或减少 max_hypotheses。"
-                f"\n\n📋 输出预览（前300字符）：{preview}..."
-                f"\n\n🔧 请调整 topic 参数或降低 max_hypotheses 后重试。"
+                f"Hypothesis generation encountered an issue: {parsed['parse_error']}. "
+                f"LLM output may have been truncated. "
+                f"Try narrowing the search scope or reducing max_hypotheses."
+                f"\n\nOutput preview (first 300 chars): {preview}..."
+                f"\n\nPlease adjust the topic parameter or lower max_hypotheses and retry."
             )
 
-        # 人类可读摘要
-        lines = [f"🔬 假设生成报告 —— {topic}\n"]
+        # Human-readable summary
+        lines = [f"Hypothesis Generation Report -- {topic}\n"]
 
         gap_analysis = parsed.get("gap_analysis", [])
-        lines.append(f"识别到 {len(gap_analysis)} 个研究 Gap：\n")
+        lines.append(f"Identified {len(gap_analysis)} research Gap(s):\n")
 
         for i, gap in enumerate(gap_analysis):
             level = gap.get("level", "?")
-            desc = gap.get("description", "无描述")
+            desc = gap.get("description", "No description")
             evidence = gap.get("evidence", [])
-            level_labels = {1: "矛盾点", 2: "未覆盖区域", 3: "过度简化", 4: "跨尺度不一致"}
+            level_labels = {1: "Contradiction", 2: "Uncovered Region", 3: "Over-simplified", 4: "Cross-scale Inconsistent"}
             level_label = level_labels.get(level, f"Level {level}")
 
-            lines.append(f"### Gap {i+1}（{level_label}）")
+            lines.append(f"### Gap {i+1} ({level_label})")
             lines.append(f"{desc}")
             if evidence:
-                lines.append(f"证据：{'；'.join(evidence[:3])}")
+                lines.append(f"Evidence: {'; '.join(evidence[:3])}")
             lines.append("")
 
             for j, hyp in enumerate(gap.get("hypotheses", [])):
                 score = hyp.get("composite_score", "N/A")
                 valid = hyp.get("physics_validation", {}).get("valid", True)
-                status = "✅" if valid else "⚠️"
-                lines.append(f"  {status} 假设 {j+1}（综合评分: {score}）")
+                status = "[OK]" if valid else "[WARN]"
+                lines.append(f"  {status} Hypothesis {j+1} (Composite Score: {score})")
                 lines.append(f"  {hyp.get('hypothesis', '—')}")
-                lines.append(f"  预测：{hyp.get('prediction', '—')}")
-                lines.append(f"  验证方法：{hyp.get('validation_method', '—')}")
+                lines.append(f"  Prediction: {hyp.get('prediction', '—')}")
+                lines.append(f"  Validation Method: {hyp.get('validation_method', '—')}")
                 if not valid:
                     reason = hyp.get("physics_validation", {}).get("reason", "")
-                    lines.append(f"  ⚠️ 物理约束警告：{reason}")
+                    lines.append(f"  [WARN] Physics constraint warning: {reason}")
                 lines.append("")
 
-        # 排序后的 Top 假设
+        # Ranked top hypotheses
         ranked = parsed.get("ranked_hypotheses", [])
         if ranked:
             lines.append("---")
-            lines.append(f"🏆 Top {len(ranked)} 假设（按综合评分排序）：\n")
+            lines.append(f"Top {len(ranked)} Hypotheses (ranked by composite score):\n")
             for i, hyp in enumerate(ranked):
                 score = hyp.get("composite_score", 0)
                 valid = hyp.get("physics_validation", {}).get("valid", True)
-                status = "✅" if valid else "⚠️"
+                status = "[OK]" if valid else "[WARN]"
                 lines.append(f"{i+1}. {status} [{score}] {hyp.get('hypothesis', '—')}")
-                lines.append(f"   预测：{hyp.get('prediction', '—')}")
+                lines.append(f"   Prediction: {hyp.get('prediction', '—')}")
             lines.append("")
 
-        # 追加原始 JSON（供下游解析）
+        # Append raw JSON (for downstream parsing)
         lines.append("---")
-        lines.append("📊 结构化数据（JSON）：")
-        # 清理内部字段
+        lines.append("Structured Data (JSON):")
         clean = self._clean_for_output(parsed)
         lines.append(json.dumps(clean, indent=2, ensure_ascii=False))
 
         return "\n".join(lines)
 
     def _clean_for_output(self, parsed: dict[str, Any]) -> dict[str, Any]:
-        """清理内部字段，输出干净 JSON。"""
+        """Remove internal fields, output clean JSON."""
         clean = {
             "gap_analysis": [],
             "ranked_hypotheses": [],

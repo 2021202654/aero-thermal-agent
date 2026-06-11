@@ -28,3 +28,36 @@ mem.working.append("read_papers", "10.1063/5.0294696")
 # 快照
 snapshot = mem.working.snapshot()
 ```
+
+---
+
+# 04 Memory System
+
+## Status: ✅ Implemented
+
+### Three-Layer Memory Architecture
+
+| Layer | File | Description |
+|------|------|------|
+| **Short-term Memory** | `../core/memory.py -> ShortTermMemory` | Sliding window conversation queue, auto-truncated by token count |
+| **Working Memory** | `../core/memory.py -> WorkingMemory` | Current research task context (search terms / papers read / intermediate results) |
+| **Long-term Memory** | `../core/memory.py -> Memory` (interface reserved) | User preferences, high-frequency query cache |
+
+### Usage Example
+
+```python
+from core.memory import Memory
+
+mem = Memory()
+
+# Short-term: automatic conversation management
+mem.short.add(Message.user("Hello"))
+
+# Working: store task state
+mem.working.set("task_state", "searching")
+mem.working.append("search_keywords", "SBLI")
+mem.working.append("read_papers", "10.1063/5.0294696")
+
+# Snapshot
+snapshot = mem.working.snapshot()
+```

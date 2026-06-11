@@ -1,9 +1,9 @@
 """
-记忆系统 —— 仿 MetaGPT Memory，管理 Agent 的三种记忆
+Memory System — MetaGPT-inspired, manages three types of Agent memory
 
-- 短期记忆：当前对话窗口（滑动窗口，自动截断）
-- 工作记忆：当前研究任务上下文（检索词、已读论文、中间结果）
-- 长期记忆：用户偏好 + 查询缓存（可选持久化到 JSON）
+- Short-term: Current conversation window (sliding window, auto-truncation)
+- Working: Current research task context (search terms, read papers, intermediate results)
+- Long-term: User preferences + query cache (optional persistence to JSON)
 """
 
 from __future__ import annotations
@@ -14,12 +14,12 @@ from .message import Message
 
 
 class ShortTermMemory:
-    """短期记忆 —— 滑动窗口消息队列。
+    """Short-term memory — sliding-window message queue.
 
-    自动截断策略：
-    - max_tokens 估算是字符数 / 2（保守，中文实际约 1.5 char/token）
-    - 保留最近 N 轮完整对话
-    - 始终保留 system message
+    Auto-truncation strategy:
+    - max_tokens estimate uses char_count / 2 (conservative; Chinese ~1.5 char/token)
+    - Preserve the last N complete dialogue turns
+    - Always retain system message
     """
 
     def __init__(self, max_tokens: int = 8000):
@@ -34,7 +34,7 @@ class ShortTermMemory:
         return list(self._messages)
 
     def get_recent(self, n: int = 10) -> list[Message]:
-        """获取最近 n 条消息。"""
+        """Get the last n messages."""
         return self._messages[-n:]
 
     def clear(self, keep_system: bool = True) -> None:
@@ -44,9 +44,9 @@ class ShortTermMemory:
             self._messages = []
 
     def _trim(self) -> None:
-        """按估算 token 数截断。"""
+        """Truncate by estimated token count."""
         while self._estimated_tokens() > self.max_tokens:
-            # 跳过 system message，从第二条开始删
+            # Skip system message; delete from the second message onward
             if len(self._messages) > 1 and self._messages[0].role == "system":
                 self._messages.pop(1)
             elif self._messages:
@@ -62,14 +62,14 @@ class ShortTermMemory:
 
 
 class WorkingMemory:
-    """工作记忆 —— 当前研究任务上下文。
+    """Working memory — current research task context.
 
-    存的是结构化状态，不是对话文本：
-    - search_keywords: 本次任务已用的检索词
-    - read_papers: 已阅读/引用的论文 DOI 列表
-    - retrieved_snippets: 检索到的文本片段
-    - intermediate_results: 多步推理的中间结果
-    - task_state: 当前任务状态机
+    Stores structured state, not dialogue text:
+    - search_keywords: Search terms used in this task
+    - read_papers: DOIs of papers read/cited
+    - retrieved_snippets: Retrieved text snippets
+    - intermediate_results: Multi-step reasoning intermediate results
+    - task_state: Current task state machine
     """
 
     def __init__(self):
@@ -82,13 +82,13 @@ class WorkingMemory:
         return self._store.get(key, default)
 
     def append(self, key: str, value: Any) -> None:
-        """追加到列表型字段。"""
+        """Append to a list-type field."""
         if key not in self._store:
             self._store[key] = []
         self._store[key].append(value)
 
     def snapshot(self) -> dict[str, Any]:
-        """返回工作记忆摘要，用于注入 LLM 上下文。"""
+        """Return working memory summary for injection into LLM context."""
         return {
             k: v
             for k, v in self._store.items()
@@ -104,11 +104,11 @@ class WorkingMemory:
 
 
 class Memory:
-    """统一记忆接口。
+    """Unified memory interface.
 
-    用法：
+    Usage:
         mem = Memory()
-        mem.short.add(Message.user("你好"))
+        mem.short.add(Message.user("Hello"))
         mem.working.set("task_state", "searching")
     """
 

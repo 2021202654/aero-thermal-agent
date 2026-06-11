@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 """
-气固热导 AI Agent —— 命令行入口
+Gas-Solid Thermal Conductivity AI Agent — Command Line Interface
 
-用法：
-    # 交互模式
+Usage:
+    # Interactive mode
     python run_agent.py
 
-    # 单次问答
-    python run_agent.py --task "比较 SiO₂ 和 SiC 在 2000K 下的催化复合系数"
+    # Single Q&A
+    python run_agent.py --task "Compare catalytic recombination coefficients of SiO2 and SiC at 2000K"
 
-    # 指定 LLM
+    # Specify LLM
     python run_agent.py --llm vllm_local
     python run_agent.py --llm bailian
     python run_agent.py --llm ollama
 
-    # Plan-Execute 模式
-    python run_agent.py --mode plan_execute --task "评估现有气固界面催化模型的跨尺度适用性"
+    # Plan-Execute mode
+    python run_agent.py --mode plan_execute --task "Evaluate cross-scale applicability of existing gas-solid interface catalytic models"
 
-依赖：
+Dependencies:
     pip install pydantic httpx numpy
-    # FAISS 检索需要：pip install faiss-cpu
-    # 向量检索 embedding 需要配置 embedding 模型
+    # FAISS retrieval requires: pip install faiss-cpu
+    # Vector retrieval embedding requires embedding model configuration
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-# 确保 05_AI_Agent/ 和项目根在 path 中
+# Ensure 05_AI_Agent/ and project root are in path
 AGENT_DIR = Path(__file__).parent
 PROJECT = AGENT_DIR.parent
 sys.path.insert(0, str(AGENT_DIR))
@@ -49,7 +49,7 @@ from tools.hypothesis import HypothesisGenerator
 
 
 def _equip_tools(agent, config: AgentConfig):
-    """统一装备所有工具（含需要 LLM 注入的工具）。"""
+    """Uniformly equip all tools (including tools requiring LLM injection)."""
     search = LiteratureSearchTool()
     web = WebSearchTool()
 
@@ -62,7 +62,7 @@ def _equip_tools(agent, config: AgentConfig):
     agent.equip(ReportTool())
     agent.equip(ExportFindingTool())
     agent.equip(PandocExportTool())
-    # AI Scientist 核心：假设生成器（需要 LLM + 检索工具注入）
+    # AI Scientist core: hypothesis generator (requires LLM + retrieval tool injection)
     agent.equip(HypothesisGenerator(
         llm=agent.llm,
         search_tool=search,
@@ -71,7 +71,7 @@ def _equip_tools(agent, config: AgentConfig):
 
 
 async def run_once(config: AgentConfig, task: str):
-    """单次问答模式。"""
+    """Single Q&A mode."""
     agent = config.build_agent()
     _equip_tools(agent, config)
 
@@ -100,17 +100,17 @@ async def run_once(config: AgentConfig, task: str):
 
 
 async def interactive(config: AgentConfig):
-    """交互模式 —— 持续对话。"""
+    """Interactive mode — continuous dialogue."""
     agent = config.build_agent()
     _equip_tools(agent, config)
 
     print(f"\n{'='*60}")
-    print(f" 气固热导 AI Agent — {agent.role.name}")
+    print(f" Gas-Solid Thermal AI Agent — {agent.role.name}")
     print(f" LLM: {config.llm.model} @ {config.llm.base_url}")
-    print(f" 模式: {config.mode} | 工具: {', '.join(agent.registry.list_names())}")
+    print(f" Mode: {config.mode} | Tools: {', '.join(agent.registry.list_names())}")
     print(f"{'='*60}")
-    print(" 输入 'quit' 退出 | 'clear' 清空记忆 | 'info' 查看状态")
-    print(' 多行输入: 输入 """ 开始, 再输入 """ 结束\n')
+    print(" Enter 'quit' to exit | 'clear' to clear memory | 'info' to view status")
+    print(' Multi-line input: enter """ to start, then """ to end\n')
 
     while True:
         try:
@@ -122,10 +122,10 @@ async def interactive(config: AgentConfig):
         if not first_line.strip():
             continue
 
-        # ── 多行粘贴模式 ──────────────────────────
+        # ── Multi-line paste mode ─────────────────────
         if first_line.strip() == '"""':
             lines = []
-            print("> （多行输入模式，输入 \"\"\" 结束）")
+            print("> (Multi-line input mode, enter \"\"\" to end)")
             while True:
                 try:
                     line = input()
@@ -149,7 +149,7 @@ async def interactive(config: AgentConfig):
             continue
         if task.lower() == "info":
             print(agent.describe())
-            print(f"Memory: {len(agent.memory.short)} 条消息")
+            print(f"Memory: {len(agent.memory.short)} messages")
             print(f"Working: {agent.memory.working.snapshot()}\n")
             continue
 
@@ -159,7 +159,7 @@ async def interactive(config: AgentConfig):
             print(reply.content)
             print()
         except Exception as e:
-            print(f"\n❌ 运行异常：{e}\n")
+            print(f"\n[!] Runtime error: {e}\n")
 
     await agent.close()
 
@@ -169,45 +169,45 @@ async def interactive(config: AgentConfig):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="气固热导 AI Agent — 高超声速气动热物理研究助手"
+        description="Gas-Solid Thermal AI Agent — Hypersonic aerodynamic thermophysics research assistant"
     )
     parser.add_argument(
         "--task", "-t", type=str, default=None,
-        help="单次任务（省略则进入交互模式）",
+        help="Single task (if omitted, enters interactive mode)",
     )
     parser.add_argument(
         "--llm", "-l", type=str, default="vllm_local",
         choices=["vllm_local", "bailian", "siliconflow", "ollama", "custom"],
-        help="LLM 后端选择",
+        help="LLM backend selection",
     )
     parser.add_argument(
         "--mode", "-m", type=str, default="react",
         choices=["react", "plan_execute"],
-        help="Agent 运行模式",
+        help="Agent execution mode",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true", default=False,
-        help="打印工具调用详情",
+        help="Print tool call details",
     )
     parser.add_argument(
         "--model", type=str, default=None,
-        help="覆盖 LLM 模型名",
+        help="Override LLM model name",
     )
     parser.add_argument(
         "--base-url", type=str, default=None,
-        help="覆盖 LLM API 地址",
+        help="Override LLM API address",
     )
 
     args = parser.parse_args()
 
-    # 构建配置
+    # Build configuration
     config = AgentConfig(llm=args.llm, mode=args.mode, verbose=args.verbose)
     if args.model:
         config.llm.model = args.model
     if args.base_url:
         config.llm.base_url = args.base_url
 
-    # 运行
+    # Execute
     if args.task:
         asyncio.run(run_once(config, args.task))
     else:
