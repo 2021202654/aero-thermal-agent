@@ -70,6 +70,33 @@ def _equip_tools(agent, config: AgentConfig):
     ))
 
 
+async def _handle_fallback(agent, result):
+    """Handle fallback confirmation. Returns final AgentResult."""
+    sig = result.fallback_signal
+    if not sig.triggered:
+        return result
+
+    print(f"\n{'='*60}")
+    print(f"[!] LLM Fallback Required")
+    print(f"    Reason: {sig.reason}")
+    print(f"    Original: {sig.original_preset}  →  Suggested: {sig.suggested_preset}")
+    print(f"    Fallback chain: {' → '.join(sig.chain)}")
+    print(f"{'='*60}")
+    print(f"\n  Accept fallback to [{sig.suggested_preset}]? (y/n): ", end="", flush=True)
+    try:
+        choice = input().strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        choice = "n"
+
+    if choice in ("y", "yes"):
+        print(f"\n  Switching to {sig.suggested_preset}...")
+        confirmed = await agent.confirm_fallback(sig.suggested_preset)
+        return confirmed
+    else:
+        print("\n  Fallback declined by user. Returning current result.")
+        return result
+
+
 async def run_once(config: AgentConfig, task: str):
     """Single Q&A mode."""
     agent = config.build_agent()
@@ -78,7 +105,9 @@ async def run_once(config: AgentConfig, task: str):
     print(f"\n{'='*60}")
     print(f"Agent: {agent.role.name}")
     print(f"LLM:  {config.llm.model} @ {config.llm.base_url}")
-    print(f"Mode: {config.mode}")
+    print(f"Mode: {config.mode} | Critique: {config.critique_rounds} rounds")
+    if config.auto_route:
+        print(f"Auto-route: enabled (complexity routing + fallback)")
     print(f"Tools: {agent.registry.list_names()}")
     print(f"{'='*60}\n")
     print(f"[*] Task: {task}\n")
@@ -86,10 +115,16 @@ async def run_once(config: AgentConfig, task: str):
     print("[...] Agent thinking...\n")
 
     try:
-        reply = await agent.run(task)
-        print(reply.content)
+        result = await agent.run(task)
+
+        # Handle fallback if triggered
+        if result.fallback_signal.triggered:
+            result = await _handle_fallback(agent, result)
+
+        print(result.message.content)
         print(f"\n{'─'*60}")
-        print(f"[i] Metadata: {reply.metadata}")
+        print(f"[i] Model used: {result.model_used} | Complexity: {result.complexity or 'n/a'}")
+        print(f"[i] Metadata: {result.message.metadata}")
     except Exception as e:
         import traceback
         print(f"\n[!] Agent error: {e}")
@@ -104,10 +139,12 @@ async def interactive(config: AgentConfig):
     agent = config.build_agent()
     _equip_tools(agent, config)
 
+    route_str = " | Auto-route: on" if config.auto_route else ""
     print(f"\n{'='*60}")
     print(f" Gas-Solid Thermal AI Agent — {agent.role.name}")
     print(f" LLM: {config.llm.model} @ {config.llm.base_url}")
-    print(f" Mode: {config.mode} | Tools: {', '.join(agent.registry.list_names())}")
+    print(f" Mode: {config.mode} | Critique: {config.critique_rounds} rounds{route_str}")
+    print(f" Tools: {', '.join(agent.registry.list_names())}")
     print(f"{'='*60}")
     print(" Enter 'quit' to exit | 'clear' to clear memory | 'info' to view status")
     print(' Multi-line input: enter """ to start, then """ to end\n')
@@ -155,8 +192,13 @@ async def interactive(config: AgentConfig):
 
         print("Agent: ", end="", flush=True)
         try:
-            reply = await agent.run(task)
-            print(reply.content)
+            result = await agent.run(task)
+
+            # Handle fallback if triggered
+            if result.fallback_signal.triggered:
+                result = await _handle_fallback(agent, result)
+
+            print(result.message.content)
             print()
         except Exception as e:
             print(f"\n[!] Runtime error: {e}\n")
@@ -194,6 +236,14 @@ def main():
         help="Number of self-critique rounds after ReAct loop (default 2, set to 0 to disable)",
     )
     parser.add_argument(
+        "--max-react-steps", type=int, default=15,
+        help="Maximum ReAct steps before forced synthesis (default 15)",
+    )
+    parser.add_argument(
+        "--auto-route", action="store_true", default=False,
+        help="Enable LLM-based complexity routing and automatic fallback with user confirmation",
+    )
+    parser.add_argument(
         "--model", type=str, default=None,
         help="Override LLM model name",
     )
@@ -205,7 +255,7 @@ def main():
     args = parser.parse_args()
 
     # Build configuration
-    config = AgentConfig(llm=args.llm, mode=args.mode, verbose=args.verbose, critique_rounds=args.critique_rounds)
+    config = AgentConfig(llm=args.llm, mode=args.mode, verbose=args.verbose, critique_rounds=args.critique_rounds, max_react_steps=args.max_react_steps, auto_route=args.auto_route)
     if args.model:
         config.llm.model = args.model
     if args.base_url:

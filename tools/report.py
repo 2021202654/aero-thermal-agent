@@ -91,17 +91,31 @@ class ReportTool(Action):
         findings: list[dict] | None = None,
         references: list[dict] | None = None,
     ) -> str:
-        """Generate Markdown report and save."""
+        """Generate Markdown report and save.
+
+        If references is empty but content contains DOI strings,
+        auto-extracts them as fallback references.
+        """
         timestamp = datetime.now()
         safe_title = self._sanitize_filename(title)
         filename = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{safe_title}.md"
         filepath = self._output_dir / filename
 
+        # ── Auto-extract DOIs from content as fallback ──
+        effective_refs = references or []
+        if not effective_refs and content:
+            extracted = self._extract_dois_from_text(content)
+            if extracted:
+                effective_refs = [
+                    {"title": f"DOI: {doi}", "doi": doi, "year": "?"}
+                    for doi in extracted
+                ]
+
         report = self._build_report(
             title=title,
             content=content,
             findings=findings or [],
-            references=references or [],
+            references=effective_refs,
             timestamp=timestamp,
         )
 
@@ -193,6 +207,32 @@ class ReportTool(Action):
         if len(safe) > 60:
             safe = safe[:60]
         return safe.strip()
+
+    @staticmethod
+    def _extract_dois_from_text(text: str) -> list[str]:
+        """Extract DOI strings from arbitrary text.
+
+        Handles common formats:
+          - https://doi.org/10.1038/nature12373
+          - doi:10.1038/nature12373
+          - 10.1038/nature12373
+          - DOI: 10.1038/nature12373
+        Returns deduplicated list of bare DOIs (no prefix).
+        """
+        import re
+
+        # Match 10.XXXX/... pattern, allowing for newline/space separators
+        pattern = r'(?:https?://(?:dx\.)?doi\.org/)?(?:doi:?\s*)?(10\.\d{4,}/[^\s一-鿿.,;:()\]\'\"。；：""''（）【】]+)'
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        seen = set()
+        dois = []
+        for m in matches:
+            # Strip trailing punctuation that commonly follows DOI
+            cleaned = re.sub(r'[\.,;:)\]\'"。、《》]+$', '', m.strip())
+            if cleaned and cleaned not in seen and len(cleaned) > 8:
+                seen.add(cleaned)
+                dois.append(cleaned)
+        return dois
 
 
 class ExportFindingTool(Action):

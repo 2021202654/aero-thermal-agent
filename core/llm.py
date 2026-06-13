@@ -23,6 +23,7 @@ class LLMConfig(BaseModel):
     temperature: float = 0.3
     max_tokens: int = 2048
     timeout: float = 120.0
+    preset_name: str = ""  # e.g. "bailian", "siliconflow" — set by AgentConfig factory
 
 
 class LLMInterface:

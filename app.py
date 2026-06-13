@@ -48,13 +48,14 @@ from tools.pandoc_export import PandocExportTool
 
 _agent = None
 _config = None
+_pending_fallback: dict = {}  # {"suggested_preset": str, "reason": str}
 
 
-def build_agent(llm: str = "vllm_local", mode: str = "react", verbose: bool = False, critique_rounds: int = 2):
+def build_agent(llm: str = "vllm_local", mode: str = "react", verbose: bool = False, critique_rounds: int = 2, max_react_steps: int = 15, auto_route: bool = False):
     """Build and equip the Agent."""
     global _agent, _config
 
-    _config = AgentConfig(llm=llm, mode=mode, verbose=verbose, critique_rounds=critique_rounds)
+    _config = AgentConfig(llm=llm, mode=mode, verbose=verbose, critique_rounds=critique_rounds, max_react_steps=max_react_steps, auto_route=auto_route)
     _agent = _config.build_agent()
 
     # Equip all 9 tools
@@ -76,18 +77,55 @@ def build_agent(llm: str = "vllm_local", mode: str = "react", verbose: bool = Fa
 
 async def respond(message: str, history: list):
     """Handle each dialogue turn."""
+    global _pending_fallback
+
     if _agent is None:
         yield "Gradio Web UI — Hypersonic Aerothermodynamics Research Assistant"
         return
 
+    # ── Check for pending fallback confirmation ──
+    if _pending_fallback:
+        suggested = _pending_fallback["suggested_preset"]
+        reason = _pending_fallback["reason"]
+        if message.strip().lower().startswith("confirm"):
+            # User confirmed — apply fallback and retry
+            _pending_fallback = {}
+            yield f"\n🔄 Switching to **{suggested}** and retrying...\n"
+            try:
+                confirmed = await _agent.confirm_fallback(suggested)
+                yield confirmed.message.content
+                return
+            except Exception as e:
+                yield f"Fallback retry failed: {e}"
+                return
+        else:
+            # User declined
+            _pending_fallback = {}
+            yield "(Fallback declined. Continuing with current model.) "
+
     # Agent internally manages memory; history param is only used by Gradio for display
     try:
-        reply = await _agent.run(message)
+        result = await _agent.run(message)
     except Exception as e:
         yield f"Agent execution error: {e}"
         return
 
-    yield reply.content
+    # ── Fallback triggered — prompt user to confirm ──
+    if result.fallback_signal.triggered:
+        sig = result.fallback_signal
+        _pending_fallback = {"suggested_preset": sig.suggested_preset, "reason": sig.reason}
+        yield (
+            f"\n{'='*60}\n"
+            f"⚠️ **Fallback Required**\n"
+            f"Reason: {sig.reason}\n"
+            f"Current: `{sig.original_preset}` → Switch to: `{sig.suggested_preset}`\n"
+            f"Chain: `{' → '.join(sig.chain)}`\n"
+            f"{'='*60}\n\n"
+            f"Type **confirm {sig.suggested_preset}** to accept, or anything else to continue with current model.\n"
+        )
+        return
+
+    yield result.message.content
 
 
 # ── Status Viewer ───────────────────────────────────
@@ -146,6 +184,14 @@ def main():
         "--critique-rounds", type=int, default=2,
         help="Number of self-critique rounds after ReAct loop (default 2, set to 0 to disable)",
     )
+    parser.add_argument(
+        "--max-react-steps", type=int, default=15,
+        help="Maximum ReAct steps before forced synthesis (default 15)",
+    )
+    parser.add_argument(
+        "--auto-route", action="store_true", default=False,
+        help="Enable LLM-based complexity routing and automatic fallback with user confirmation",
+    )
 
     args = parser.parse_args()
     llm = args.llm
@@ -153,7 +199,7 @@ def main():
         parser.error("--llm custom requires --base-url")
 
     # Build Agent
-    agent = build_agent(llm=llm, mode=args.mode, verbose=args.verbose, critique_rounds=args.critique_rounds)
+    agent = build_agent(llm=llm, mode=args.mode, verbose=args.verbose, critique_rounds=args.critique_rounds, max_react_steps=args.max_react_steps, auto_route=args.auto_route)
     if args.model:
         agent.llm.config.model = args.model
     if args.base_url:

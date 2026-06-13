@@ -65,6 +65,7 @@ def _bailian_config() -> LLMConfig:
         model="qwen-plus",
         temperature=0.3,
         max_tokens=2048,
+        preset_name="bailian",
     )
 
 
@@ -76,6 +77,7 @@ def _vllm_local_config() -> LLMConfig:
         model="aero-thermal-expert",
         temperature=0.3,
         max_tokens=2048,
+        preset_name="vllm_local",
     )
 
 
@@ -87,6 +89,7 @@ def _ollama_config() -> LLMConfig:
         model="llama3.1:8b",
         temperature=0.3,
         max_tokens=2048,
+        preset_name="ollama",
     )
 
 
@@ -98,6 +101,7 @@ def _siliconflow_config() -> LLMConfig:
         model="deepseek-ai/DeepSeek-V3",
         temperature=0.3,
         max_tokens=2048,
+        preset_name="siliconflow",
     )
 
 
@@ -141,7 +145,30 @@ def _custom_config() -> LLMConfig:
         model=cfg.get("model", ""),
         temperature=cfg.get("temperature", 0.3),
         max_tokens=cfg.get("max_tokens", 2048),
+        preset_name="custom",
     )
+
+
+# ── Fallback Chains ────────────────────────────────────────────────────────────
+
+# Preset → fallback order (tried in sequence, user asked before each switch)
+FALLBACK_CHAINS: dict[str, list[str]] = {
+    "bailian":     ["siliconflow", "ollama"],
+    "siliconflow": ["bailian", "ollama"],
+    "vllm_local":  ["bailian", "siliconflow"],
+    "ollama":      ["bailian", "siliconflow"],
+    "custom":      ["bailian", "siliconflow"],
+}
+
+
+# ── Policy Routes ─────────────────────────────────────────────────────────────
+
+# Complexity → preferred preset (balanced cost-quality policy)
+POLICY_ROUTES: dict[str, str] = {
+    "simple":   "ollama",       # Fast & cheap for trivial tasks
+    "moderate": "siliconflow",   # Best cost-performance
+    "complex":  "bailian",      # Most capable model for hard tasks
+}
 
 
 # ── Main Configuration ──────────────────────────────
@@ -176,6 +203,7 @@ class AgentConfig:
         max_react_steps: int = 15,
         max_plan_steps: int = 6,
         critique_rounds: int = 2,  # Self-critique iterations after ReAct loop
+        auto_route: bool = False,  # Enable LLM-based complexity routing + auto-fallback
         verbose: bool = False,
         # Path configuration
         faiss_index_dir: str | Path | None = None,
@@ -195,6 +223,7 @@ class AgentConfig:
         self.max_react_steps = max_react_steps
         self.max_plan_steps = max_plan_steps
         self.critique_rounds = critique_rounds
+        self.auto_route = auto_route
         self.verbose = verbose
 
         # Paths
@@ -236,6 +265,7 @@ class AgentConfig:
             max_react_steps=self.max_react_steps,
             max_plan_steps=self.max_plan_steps,
             critique_rounds=self.critique_rounds,
+            auto_route=self.auto_route,
             verbose=self.verbose,
         )
 

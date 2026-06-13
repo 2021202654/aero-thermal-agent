@@ -92,10 +92,18 @@ class ReActOrchestrator:
             else:
                 response = await self.llm.chat(messages)
 
-            # ── Case 1: LLM returns text (task done) ──
+            # ── Case 1: LLM returns text with NO tool calls (task done) ──
             if response.content and not response.tool_calls:
                 final_reply = response.content
                 break
+
+            # ── Case 1b: LLM returns text WITH tool calls — don't break, execute tools then loop ──
+            # The text (if any) is partial; wait for all tools to finish before treating any text as final
+            if response.content and response.tool_calls:
+                # content is a partial plan/thinking — append to messages but do NOT break
+                if self.verbose:
+                    preview = response.content[:200]
+                    print(f"\n  [partial] LLM thinking (will be superseded after tool execution): {preview}...")
 
             # ── Case 2: LLM requests tool call ──
             if response.tool_calls:
