@@ -34,6 +34,36 @@ def _is_code_model(model: str) -> bool:
     return model.lower() in _CODE_MODELS
 
 
+def _convert_tools_to_responses_format(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert Chat Completions tool schema → Responses API tool schema.
+
+    Chat Completions format:
+        {type: "function", function: {name, description, parameters}}
+
+    Responses API format (OpenAI spec, qwen3.5-plus compatible):
+        {type: "function", name, description, parameters}
+
+    Without this conversion, qwen3.5-plus / qwen3.7-plus returns 400:
+        "The parameters, when provided as a dict, must confirm to a valid
+         openai-compatible JSON schema. Please check the schema definition for tool: ."
+    """
+    converted = []
+    for tool in tools:
+        if tool.get("type") == "function" and "function" in tool:
+            # Chat Completions 风格 → Responses API 风格
+            func = tool["function"]
+            converted.append({
+                "type": "function",
+                "name": func.get("name", ""),
+                "description": func.get("description", ""),
+                "parameters": func.get("parameters", {}),
+            })
+        else:
+            # 已经是 Responses API 格式或自定义格式，原样透传
+            converted.append(tool)
+    return converted
+
+
 class LLMConfig(BaseModel):
     """LLM connection configuration."""
 
@@ -130,24 +160,59 @@ class LLMInterface:
         """
         url = f"{self.config.base_url.rstrip('/')}/responses"
 
-        # Build input.messages from conversation history
-        input_messages = []
+        # Build input: Responses API 用的是 input_items 数组，而不是简单的 messages 数组。
+        # tool result 需要从 message 转成 function_call_output item；
+        # assistant 带 tool_calls 的也需要转成对应的 function_call item。
+        # 普通 user/assistant/system message 直接透传。
+        input_items: list[dict[str, Any]] = []
         for msg in messages:
             role = msg.get("role", "user")
-            content = msg.get("content", "")
-            # Skip empty messages
-            if not content and role != "system":
+            content = msg.get("content", "") or ""
+
+            # 1. tool result → function_call_output（不能是 role="tool" message）
+            if role == "tool":
+                call_id = msg.get("call_id") or msg.get("tool_call_id") or ""
+                output = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+                input_items.append({
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": output,
+                })
                 continue
-            input_messages.append({"role": role, "content": content})
+
+            # 2. assistant with tool_calls → 一个 assistant message + 多个 function_call items
+            if role == "assistant" and msg.get("tool_calls"):
+                # 助手文本部分（可能为空）
+                if content:
+                    input_items.append({"role": "assistant", "content": content})
+                for tc in msg["tool_calls"]:
+                    func = tc.get("function", {})
+                    args = func.get("arguments", "{}")
+                    if isinstance(args, dict):
+                        args = json.dumps(args, ensure_ascii=False)
+                    input_items.append({
+                        "type": "function_call",
+                        "call_id": tc.get("id", ""),
+                        "name": func.get("name", ""),
+                        "arguments": args,
+                    })
+                continue
+
+            # 3. 普通 user/assistant/system message
+            if not content:
+                continue
+            input_items.append({"role": role, "content": content})
 
         body: dict[str, Any] = {
             "model": self.config.model,
-            "input": input_messages,  # Direct array of message objects, not {"messages": ...}
+            "input": input_items,  # input_items: mixture of messages + function_call + function_call_output
             "temperature": self.config.temperature,
             "max_tokens": self.config.max_tokens,
         }
         if tools:
-            body["tools"] = tools
+            # qwen3.5-plus (Responses API) 要求 tools 字段是顶层平铺结构，
+            # 与 Chat Completions 的 {type, function: {name, ...}} 不同。
+            body["tools"] = _convert_tools_to_responses_format(tools)
         if response_id:
             body["previous_response_id"] = response_id
 
@@ -196,10 +261,10 @@ class LLMInterface:
                         content += content_block.get("text", "")
 
             elif item_type == "function_call":
-                # Tool call from code model
-                fc = item.get("function_call", {})
-                name = fc.get("name", "")
-                raw_args = fc.get("arguments", "{}")
+                # Tool call from code model.
+                # Responses API 输出 item 顶层就是 name/arguments/call_id（无 function_call 嵌套）
+                name = item.get("name", "")
+                raw_args = item.get("arguments", "{}")
                 # arguments may be a dict or JSON string — always ensure string for orchestrator
                 if isinstance(raw_args, dict):
                     raw_args = json.dumps(raw_args, ensure_ascii=False)
