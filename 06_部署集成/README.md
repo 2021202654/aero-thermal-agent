@@ -6,10 +6,10 @@
 
 ## 部署架构
 
-```
+```text
 DSW 实例（V100 16GB / A10 24GB）
 ├── vLLM API Server (localhost:8000)  ← 加载微调模型 aero-thermal-8b
-├── Agent Framework                   ← OpenAI 兼容客户端，9 个工具
+├── Agent Framework                   ← OpenAI 兼容客户端，10 个工具
 └── Gradio UI (0.0.0.0:7860)          ← DSW 自动提供公网代理 URL
 ```
 
@@ -27,20 +27,20 @@ DSW 实例（V100 16GB / A10 24GB）
 ```bash
 cd 05_AI_Agent
 
-# 百炼 API（即开即用，默认 qwen3.5-plus，支持 Responses API）
+# 百炼 API（即开即用，默认 qwen-plus，支持 Responses API）
 python run_agent.py --llm bailian
 
 # DSW vLLM
 python run_agent.py --llm custom --base-url http://localhost:8000/v1
 
 # Plan-Execute 模式
-python run_agent.py --llm custom --mode plan_execute --task "评估气固界面催化模型跨尺度适用性"
+python run_agent.py --llm custom --mode plan_execute --task "Evaluate cross-scale applicability of gas-solid interface catalytic model"
 
 # 自省迭代（默认 2 轮，设为 0 可禁用）+ 最大步数上限
-python run_agent.py --llm bailian --critique-rounds 2 --max-react-steps 20 -t "对比 SiO₂、SiC、RCG 在 1500K–3000K 的催化复合系数"
+python run_agent.py --llm bailian --critique-rounds 2 --max-react-steps 20 -t "Compare catalytic recombination coefficients of SiO2, SiC, RCG at 1500K-3000K"
 
 # Policy Routing + 自动降级（需用户确认）
-python run_agent.py --llm bailian --auto-route -t "分析气固界面催化系数建模的 Gap 并生成假设"
+python run_agent.py --llm bailian --auto-route -t "Identify research gaps in catalytic coefficient modeling and generate hypotheses"
 ```
 
 ### Gradio Web UI
@@ -71,95 +71,13 @@ python app.py --llm bailian
 ## LLM 后端
 
 | 后端 | 配置 | 适用场景 |
-|------|------|------|
+|------|------|----------|
 | vLLM (DSW) | `localhost:8000/v1` | 微调模型推理 |
-| 百炼 API（qwen3.5-plus） | `dashscope.aliyuncs.com` | 开发/调试/QA 生成，Responses API |
 | 百炼 API（qwen-plus） | `dashscope.aliyuncs.com` | Chat Completions API，兼容 function calling |
+| 百炼 API（qwen3.5-plus） | `dashscope.aliyuncs.com` | 开发/调试/QA 生成，Responses API |
+| 硅基流动（DeepSeek-V3） | `api.siliconflow.cn` | 高性价比推理，1+2 ¥/M tokens |
 | Ollama | `localhost:11434/v1` | 本地快速验证 |
 
 `config.py` 提供 5 套预设：`vllm_local` / `bailian` / `siliconflow` / `ollama` / `custom`
-> 注意：`bailian` 预设当前使用 `qwen3.5-plus`（代码模型，需 Responses API）。如需 Chat Completions + function calling，改为 `qwen-plus`。
 
----
-
-# 06 Deployment & Integration
-
-> Full-Stack Agent Deployment — DSW vLLM + Gradio
-
----
-
-## Deployment Architecture
-
-```
-DSW Instance (V100 16GB / A10 24GB)
-├── vLLM API Server (localhost:8000)  ← Loads fine-tuned model aero-thermal-8b
-├── Agent Framework                   ← OpenAI-compatible client, 9 tools
-└── Gradio UI (0.0.0.0:7860)          ← DSW auto-provides public proxy URL
-```
-
----
-
-## Deployment Entry Points
-
-| Entry | File | Purpose |
-|------|------|------|
-| CLI | `run_agent.py` | Interactive / single Q&A, `--llm` selects backend |
-| Gradio | `app.py` | Web UI, `--llm custom` connects to vLLM |
-
-### CLI Examples
-
-```bash
-cd 05_AI_Agent
-
-# Bailian API (ready to use, default qwen3.5-plus, supports Responses API)
-python run_agent.py --llm bailian
-
-# DSW vLLM
-python run_agent.py --llm custom --base-url http://localhost:8000/v1
-
-# Plan-Execute mode
-python run_agent.py --llm custom --mode plan_execute --task "Evaluate cross-scale applicability of gas-solid interface catalytic model"
-
-# Self-critique iteration (default 2 rounds, set to 0 to disable) + max steps cap
-python run_agent.py --llm bailian --critique-rounds 2 --max-react-steps 20 -t "Compare catalytic recombination coefficients of SiO2, SiC, RCG at 1500K–3000K"
-
-# Policy Routing + auto-fallback (requires user confirmation)
-python run_agent.py --llm bailian --auto-route -t "Identify research gaps in catalytic coefficient modeling and generate hypotheses"
-```
-
-### Gradio Web UI
-
-```bash
-# DSW deployment (auto gets public link)
-python app.py --llm custom --port 7860
-
-# Local development with Bailian
-python app.py --llm bailian
-```
-
----
-
-## DSW Deployment Process
-
-Execute the 4 notebooks under `04_LLM微调线/04_推理部署/` in order:
-
-| Step | Notebook | Content |
-|------|----------|------|
-| 0 | `0_DSW环境部署.ipynb` | pip mirror + PyTorch CUDA + LLaMA-Factory + vLLM + Pandoc + Chinese fonts |
-| 1 | `1_模型下载与数据注册.ipynb` | ModelScope downloads Llama-3.1-8B + dataset registration + validation |
-| 2 | `2_训练与导出.ipynb` | QLoRA 4-bit training + LoRA merge and export |
-| 3 | `3_推理与Agent部署.ipynb` | vLLM startup + Agent config + Gradio UI launch |
-
----
-
-## LLM Backends
-
-| Backend | Config | Use Case |
-|------|------|------|
-| vLLM (DSW) | `localhost:8000/v1` | Fine-tuned model inference |
-| Bailian API (qwen3.5-plus) | `dashscope.aliyuncs.com` | Development/QA, Responses API, code model |
-| Bailian API (qwen-plus) | `dashscope.aliyuncs.com` | Chat Completions API, function calling |
-| Ollama | `localhost:11434/v1` | Local quick validation |
-
-`config.py` provides 5 presets: `vllm_local` / `bailian` / `siliconflow` / `ollama` / `custom`
-> Note: `bailian` preset currently uses `qwen3.5-plus` (code model, requires Responses API). For Chat Completions + function calling, switch to `qwen-plus`.
+> 注意：`bailian` 预设当前使用 `qwen-plus`（Chat Completions + function calling）。如需 Responses API，换用 `qwen3.5-plus`。
