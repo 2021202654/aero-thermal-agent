@@ -106,8 +106,8 @@
 - `core/orchestrator.py`：新增 `critique_rounds` 参数（默认 2 轮），ReAct 主循环结束后进入 LLM 自审迭代，识别初版答案弱点并修订
 - `config.py` / `app.py` / `run_agent.py`：`--critique-rounds` CLI 参数，可配置自省轮数（设为 0 禁用）
 - `core/role.py`：强化 System Prompt，确保自省过程遵循身份约束
-
 **qwen3.5-plus 支持 + Responses API**（2026-06-13）：
+
 - `core/llm.py`：双轨 API 支持 — Chat Completions（通用模型）+ Responses API（代码模型 qwen3.5-plus 等）
 - `core/message.py`：`to_openai()` 增加 `call_id` 字段，兼容 Responses API 工具结果格式
 - `core/orchestrator.py`：新增 `_response_id` 追踪，Responses API 多轮工具调用上下文连贯
@@ -363,8 +363,8 @@ Multi-step Reasoning → Evidence Chain Synthesis → Hypothesis Generation → 
 - `core/orchestrator.py`: Added `critique_rounds` parameter (default 2 rounds); after main ReAct loop, LLM enters self-review iteration to identify weaknesses in the initial draft and revise
 - `config.py` / `app.py` / `run_agent.py`: `--critique-rounds` CLI flag, configurable number of self-critique rounds (set to 0 to disable)
 - `core/role.py`: System Prompt reinforcement to ensure self-critique process follows identity constraints
-
 **qwen3.5-plus Support + Responses API** (2026-06-13):
+
 - `core/llm.py`: Dual-API support — Chat Completions (general models) + Responses API (code models e.g. qwen3.5-plus)
 - `core/message.py`: `to_openai()` adds `call_id` field, compatible with Responses API tool result format
 - `core/orchestrator.py`: New `_response_id` tracking for multi-turn tool call continuity in Responses API

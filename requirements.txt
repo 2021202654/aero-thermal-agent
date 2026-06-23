@@ -1,17 +1,23 @@
-# 气固热导 Agent 框架依赖
-# 核心（必须）
+# 气固热导 AI Agent 依赖说明
+#
+# 本文件已被升级为分级 requirements。完整版本见同级 requirements/ 子目录：
+#
+#   requirements/
+#     ├── all.txt          ← 完整集（DSW 一键安装：pip install -r requirements/all.txt）
+#     ├── core.txt         ← 核心 Agent（pydantic + httpx + numpy）
+#     ├── pdf.txt          ← PDF 提取（pdfplumber + pymupdf）
+#     ├── retrieval.txt    ← FAISS 向量检索
+#     ├── train.txt        ← Llama-3.1-8B 微调 + vLLM 推理
+#     ├── analysis.txt     ← 数据分析 + 绘图（28 题评测）
+#     └── build_index.txt  ← 仅重建 FAISS 索引用（langchain）
+#
+# 快速选择：
+#   1. 仅跑 Agent（不训练）：pip install -r requirements/core.txt -r requirements/pdf.txt -r requirements/retrieval.txt
+#   2. 完整 SFT + 评测：    pip install -r requirements/all.txt
+#   3. 仅重建 FAISS 索引： pip install -r requirements/build_index.txt
+#
+# 旧版本（v1，单文件）：
 pydantic>=2.0
 httpx>=0.25
-
-# PDF 解析（PDFAnalysisTool）
 pymupdf>=1.23
-
-# 向量检索（FAISS 重建后需要，目前 CSV 检索可用）
 faiss-cpu>=1.7
-
-# WSL2 本地推理（Ollama 不需要这些，但如果走 transformers 直接加载需要）
-# torch>=2.1
-# transformers>=4.40
-# accelerate>=0.28
-# bitsandbytes>=0.43
-# peft>=0.10
